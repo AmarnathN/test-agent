@@ -21,6 +21,11 @@ export class ConfigLoader {
             batchExpectations: false, // Future feature
             maxCacheAge: 24,
         },
+        costControl: {
+            maxCostPerRun: 5.00,      // Hard limit $5.00
+            maxTokensPerRun: 100000,   // Hard limit 100k tokens
+            warnAtPercent: 80,
+        },
         reporters: ['html', 'junit'],
         outputDir: 'ai-test-results',
         screenshot: 'only-on-failure',
@@ -75,10 +80,25 @@ export class ConfigLoader {
 
         if (process.env.OPENAI_API_KEY) {
             config.aiProvider = 'openai';
+            // Legacy format
             config.openai = {
                 apiKey: process.env.OPENAI_API_KEY,
                 model: process.env.OPENAI_MODEL,
             };
+
+            // New format (populate if not present)
+            if (!config.ai) {
+                const { ModelTier } = require('../types'); // Lazy import to avoid cycle if any
+                config.ai = {
+                    provider: 'openai',
+                    openai: {
+                        apiKey: process.env.OPENAI_API_KEY,
+                        models: {
+                            [ModelTier.BALANCED]: process.env.OPENAI_MODEL,
+                        }
+                    }
+                };
+            }
         }
 
         if (process.env.CUSTOM_LLM_ENDPOINT) {

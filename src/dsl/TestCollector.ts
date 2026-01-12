@@ -53,7 +53,7 @@ export function test(
 /**
  * DSL function to define a test suite (for organization)
  */
-export function describe(suiteName: string, fn: () => void): void {
+export function describe(_suiteName: string, fn: () => void): void {
     // Execute the function to register tests
     fn();
 }
@@ -62,9 +62,9 @@ export function describe(suiteName: string, fn: () => void): void {
  * Skip a test
  */
 test.skip = function (
-    name: string,
-    fn: (context: TestContext) => Promise<void>,
-    options?: {
+    _name: string,
+    _fn: (context: TestContext) => Promise<void>,
+    _options?: {
         timeout?: number;
         retries?: number;
         tags?: string[];

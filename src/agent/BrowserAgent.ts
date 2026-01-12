@@ -1,5 +1,5 @@
 import { Page, BrowserContext } from '@playwright/test';
-import { BrowserAgent as IBrowserAgent, WaitOptions } from '../types';
+import { BrowserAgent as IBrowserAgent, WaitOptions, AITaskType } from '../types';
 import { BaseAIProvider } from '../ai/AIProvider';
 import { Logger } from '../utils/Logger';
 
@@ -8,14 +8,12 @@ import { Logger } from '../utils/Logger';
  */
 export class BrowserAgent implements IBrowserAgent {
     private page: Page;
-    private context: BrowserContext;
     private aiProvider: BaseAIProvider;
     private logger: Logger;
     private screenshots: string[] = [];
 
-    constructor(page: Page, context: BrowserContext, aiProvider: BaseAIProvider, logger: Logger) {
+    constructor(page: Page, _context: BrowserContext, aiProvider: BaseAIProvider, logger: Logger) {
         this.page = page;
-        this.context = context;
         this.aiProvider = aiProvider;
         this.logger = logger;
     }
@@ -111,7 +109,11 @@ export class BrowserAgent implements IBrowserAgent {
         this.logger.info(`Waiting for: ${target}`);
 
         try {
-            const selector = await this.aiProvider.locateElement(this.page, target);
+            const selector = await this.aiProvider.locateElement(
+                this.page,
+                target,
+                AITaskType.ELEMENT_RESOLUTION
+            );
             await this.page.waitForSelector(selector, {
                 timeout: options?.timeout || 30000,
                 state: options?.state || 'visible',
@@ -239,7 +241,8 @@ export class BrowserAgent implements IBrowserAgent {
         const isValid = await this.aiProvider.validateExpectation(
             this.page,
             expectation,
-            screenshot
+            screenshot,
+            AITaskType.EXPECTATION_VALIDATION
         );
 
         if (!isValid) {
@@ -334,7 +337,11 @@ export class BrowserAgent implements IBrowserAgent {
 
         // 3. Finally, use AI (LLM call - expensive!)
         this.logger.debug(`Using AI to locate: ${description}`);
-        const aiSelector = await this.aiProvider.locateElement(this.page, description);
+        const aiSelector = await this.aiProvider.locateElement(
+            this.page,
+            description,
+            AITaskType.ELEMENT_RESOLUTION
+        );
 
         // Learn this selector for future use
         if (selectorCache) {
@@ -347,7 +354,7 @@ export class BrowserAgent implements IBrowserAgent {
     /**
      * Internal method to take and store screenshot
      */
-    private async takeScreenshot(name: string): Promise<string> {
+    private async takeScreenshot(_name: string): Promise<string> {
         const screenshot = await this.page.screenshot({ type: 'png' });
         const base64 = screenshot.toString('base64');
         this.screenshots.push(base64);
@@ -358,7 +365,7 @@ export class BrowserAgent implements IBrowserAgent {
      * Fallback method to try common selectors when AI fails
      */
     private async tryFallbackSelectors(description: string): Promise<string | null> {
-        const lowerDesc = description.toLowerCase();
+        // const _lowerDesc = description.toLowerCase();
 
         // Try common patterns
         const patterns = [

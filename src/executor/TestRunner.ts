@@ -1,13 +1,12 @@
-import { chromium, firefox, webkit, Browser, BrowserContext, Page } from '@playwright/test';
+import { chromium, firefox, webkit, Browser } from '@playwright/test';
 import { TestCase, TestResult, TestSuiteResult, FrameworkConfig, TestContext } from '../types';
 import { BrowserAgent } from '../agent/BrowserAgent';
 import { OpenAIProvider } from '../ai/OpenAIProvider';
 import { CustomLLMProvider } from '../ai/CustomLLMProvider';
 import { BaseAIProvider } from '../ai/AIProvider';
 import { Logger } from '../utils/Logger';
-import { AICache, SelectorCache } from '../utils/AICache';
+import { SelectorCache } from '../utils/AICache';
 import { testRegistry } from '../dsl/TestCollector';
-import * as fs from 'fs';
 import * as path from 'path';
 
 /**
@@ -18,7 +17,6 @@ export class TestRunner {
     private browser?: Browser;
     private aiProvider: BaseAIProvider;
     private logger: Logger;
-    private aiCache: AICache;
     private selectorCache: SelectorCache;
 
     constructor(config: FrameworkConfig) {
@@ -29,7 +27,6 @@ export class TestRunner {
         const cacheEnabled = config.aiOptimization?.enableCache !== false;
         const cacheDir = config.aiOptimization?.cacheDir || '.ai-cache';
 
-        this.aiCache = new AICache(cacheDir, cacheEnabled);
         this.selectorCache = new SelectorCache(cacheDir);
 
         if (cacheEnabled) {
@@ -38,10 +35,7 @@ export class TestRunner {
 
         // Initialize AI provider based on config
         if (config.aiProvider === 'openai' && config.openai) {
-            this.aiProvider = new OpenAIProvider({
-                apiKey: config.openai.apiKey,
-                model: config.openai.model,
-            });
+            this.aiProvider = new OpenAIProvider(this.config);
         } else if (config.aiProvider === 'custom' && config.customLLM) {
             this.aiProvider = new CustomLLMProvider({
                 endpoint: config.customLLM.endpoint,

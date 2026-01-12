@@ -74,8 +74,6 @@ export class PipelineIntegration {
     private async reportToGitHub(results: TestSuiteResult): Promise<void> {
         // GitHub Actions can use annotations and job summaries
 
-        const passRate = ((results.passed / results.totalTests) * 100).toFixed(1);
-
         // Create job summary
         const summary = this.createGitHubSummary(results);
 

@@ -14,7 +14,7 @@ export class JUnitReporter implements Reporter {
         this.ensureOutputDir();
     }
 
-    onTestStart(test: TestCase): void {
+    onTestStart(_test: TestCase): void {
         // Not needed for JUnit
     }
 

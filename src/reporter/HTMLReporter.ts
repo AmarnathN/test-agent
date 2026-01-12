@@ -6,39 +6,39 @@ import * as path from 'path';
  * HTML Reporter for generating beautiful test reports
  */
 export class HTMLReporter implements Reporter {
-    private outputDir: string;
-    private testResults: TestResult[] = [];
+  private outputDir: string;
+  private testResults: TestResult[] = [];
 
-    constructor(outputDir: string = 'ai-test-results') {
-        this.outputDir = outputDir;
-        this.ensureOutputDir();
-    }
+  constructor(outputDir: string = 'ai-test-results') {
+    this.outputDir = outputDir;
+    this.ensureOutputDir();
+  }
 
-    onTestStart(test: TestCase): void {
-        // Could be used for real-time updates
-    }
+  onTestStart(_test: TestCase): void {
+    // Could be used for real-time updates
+  }
 
-    onTestEnd(result: TestResult): void {
-        this.testResults.push(result);
-    }
+  onTestEnd(result: TestResult): void {
+    this.testResults.push(result);
+  }
 
-    async onSuiteEnd(suiteResult: TestSuiteResult): Promise<void> {
-        const html = this.generateHTML(suiteResult);
-        const reportPath = path.join(this.outputDir, 'index.html');
+  async onSuiteEnd(suiteResult: TestSuiteResult): Promise<void> {
+    const html = this.generateHTML(suiteResult);
+    const reportPath = path.join(this.outputDir, 'index.html');
 
-        fs.writeFileSync(reportPath, html);
+    fs.writeFileSync(reportPath, html);
 
-        // Save screenshots
-        await this.saveScreenshots(suiteResult);
+    // Save screenshots
+    await this.saveScreenshots(suiteResult);
 
-        console.log(`\n📊 HTML Report generated: ${reportPath}`);
-    }
+    console.log(`\n📊 HTML Report generated: ${reportPath}`);
+  }
 
-    private generateHTML(suiteResult: TestSuiteResult): string {
-        const duration = suiteResult.endTime.getTime() - suiteResult.startTime.getTime();
-        const passRate = ((suiteResult.passed / suiteResult.totalTests) * 100).toFixed(1);
+  private generateHTML(suiteResult: TestSuiteResult): string {
+    const duration = suiteResult.endTime.getTime() - suiteResult.startTime.getTime();
+    const passRate = ((suiteResult.passed / suiteResult.totalTests) * 100).toFixed(1);
 
-        return `<!DOCTYPE html>
+    return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -93,13 +93,13 @@ export class HTMLReporter implements Reporter {
   </script>
 </body>
 </html>`;
-    }
+  }
 
-    private generateTestCard(result: TestResult): string {
-        const statusIcon = result.status === 'passed' ? '✓' : result.status === 'failed' ? '✗' : '○';
-        const statusClass = result.status;
+  private generateTestCard(result: TestResult): string {
+    const statusIcon = result.status === 'passed' ? '✓' : result.status === 'failed' ? '✗' : '○';
+    const statusClass = result.status;
 
-        return `
+    return `
     <div class="test-card ${statusClass}">
       <div class="test-header">
         <span class="status-icon">${statusIcon}</span>
@@ -161,10 +161,10 @@ export class HTMLReporter implements Reporter {
         </div>
       ` : ''}
     </div>`;
-    }
+  }
 
-    private getStyles(): string {
-        return `
+  private getStyles(): string {
+    return `
       * {
         margin: 0;
         padding: 0;
@@ -187,7 +187,7 @@ export class HTMLReporter implements Reporter {
         background: white;
         padding: 30px;
         border-radius: 12px;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        box-shadow: 0 4px 6px rgba(0, 4px, 6px, 0.1);
         margin-bottom: 20px;
         text-align: center;
       }
@@ -459,10 +459,10 @@ export class HTMLReporter implements Reporter {
         cursor: pointer;
       }
     `;
-    }
+  }
 
-    private getScript(): string {
-        return `
+  private getScript(): string {
+    return `
       function openModal(src) {
         const modal = document.createElement('div');
         modal.className = 'modal';
@@ -477,32 +477,32 @@ export class HTMLReporter implements Reporter {
         document.body.appendChild(modal);
       }
     `;
+  }
+
+  private async saveScreenshots(_suiteResult: TestSuiteResult): Promise<void> {
+    const screenshotsDir = path.join(this.outputDir, 'screenshots');
+    if (!fs.existsSync(screenshotsDir)) {
+      fs.mkdirSync(screenshotsDir, { recursive: true });
     }
 
-    private async saveScreenshots(suiteResult: TestSuiteResult): Promise<void> {
-        const screenshotsDir = path.join(this.outputDir, 'screenshots');
-        if (!fs.existsSync(screenshotsDir)) {
-            fs.mkdirSync(screenshotsDir, { recursive: true });
-        }
+    // Screenshots are already embedded as base64 in the HTML
+    // This method could be used to save them separately if needed
+  }
 
-        // Screenshots are already embedded as base64 in the HTML
-        // This method could be used to save them separately if needed
+  private ensureOutputDir(): void {
+    if (!fs.existsSync(this.outputDir)) {
+      fs.mkdirSync(this.outputDir, { recursive: true });
     }
+  }
 
-    private ensureOutputDir(): void {
-        if (!fs.existsSync(this.outputDir)) {
-            fs.mkdirSync(this.outputDir, { recursive: true });
-        }
-    }
-
-    private escapeHtml(text: string): string {
-        const map: Record<string, string> = {
-            '&': '&amp;',
-            '<': '&lt;',
-            '>': '&gt;',
-            '"': '&quot;',
-            "'": '&#039;',
-        };
-        return text.replace(/[&<>"']/g, m => map[m]);
-    }
+  private escapeHtml(text: string): string {
+    const map: Record<string, string> = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#039;',
+    };
+    return text.replace(/[&<>"']/g, m => map[m]);
+  }
 }

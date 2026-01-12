@@ -1,4 +1,4 @@
-import { Page, Browser, BrowserContext } from '@playwright/test';
+import { Page, BrowserContext } from '@playwright/test';
 
 /**
  * Test case definition
@@ -18,6 +18,27 @@ export interface TestContext {
     agent: BrowserAgent;
     page: Page;
     context: BrowserContext;
+}
+
+/**
+ * AI Task Types for routing
+ */
+export enum AITaskType {
+    ELEMENT_RESOLUTION = 'element_resolution',
+    EXPECTATION_VALIDATION = 'expectation_validation',
+    FAILURE_ANALYSIS = 'failure_analysis',
+    VISUAL_REGRESSION = 'visual_regression',
+    HEALING = 'healing',
+    FREE_TEXT_REASONING = 'free_text_reasoning'
+}
+
+/**
+ * Model Tiers for cost/performance trade-offs
+ */
+export enum ModelTier {
+    CHEAP = 'cheap',      // fast, low cost (e.g. gpt-3.5)
+    BALANCED = 'balanced',   // good reasoning (e.g. gpt-4)
+    PREMIUM = 'premium'     // vision + deep reasoning (e.g. gpt-4-vision)
 }
 
 /**
@@ -101,25 +122,72 @@ export interface FrameworkConfig {
     retries?: number;
     parallel?: number;
 
-    // AI Provider
-    aiProvider: 'openai' | 'custom';
+    // AI Configuration (Redesigned)
+    ai?: {
+        provider: 'openai' | 'custom';
+
+        // Vendor Config
+        openai?: {
+            apiKey: string;
+            // Map tiers to specific models
+            models?: {
+                [key in ModelTier]?: string;
+            };
+        };
+        customLLM?: {
+            endpoint: string;
+            apiKey?: string;
+            models?: {
+                [key in ModelTier]?: string;
+            };
+        };
+
+        // Routing Table (Task -> Tier)
+        routing?: {
+            [key in AITaskType]?: ModelTier;
+        };
+
+        // Budget Guards
+        budgets?: {
+            globalMonthly?: number; // USD
+            perRun?: number;        // USD
+            perTest?: number;       // USD
+        };
+
+        // CI Mode overrides
+        ciMode?: {
+            enabled?: boolean;     // if undefined, auto-detect
+            disableVision?: boolean;
+            maxPremiumCallsPerTest?: number;
+        };
+    };
+
+    // Legacy Support (mapped to new ai structure internally or kept for back-compat)
+    aiProvider?: 'openai' | 'custom';
     openai?: {
         apiKey: string;
         model?: string;
+        fastModel?: string;
     };
     customLLM?: {
         endpoint: string;
         apiKey?: string;
         model?: string;
+        fastModel?: string;
+    };
+    costControl?: {
+        maxCostPerRun?: number;
+        maxTokensPerRun?: number;
+        warnAtPercent?: number;
     };
 
-    // AI Optimization (NEW)
+    // AI Optimization
     aiOptimization?: {
-        enableCache?: boolean;           // Cache AI responses (default: true)
-        cacheDir?: string;                // Cache directory (default: .ai-cache)
-        smartMode?: boolean;              // Use fallbacks before AI (default: true)
-        batchExpectations?: boolean;      // Batch multiple expects into one call (default: true)
-        maxCacheAge?: number;             // Cache TTL in hours (default: 24)
+        enableCache?: boolean;
+        cacheDir?: string;
+        smartMode?: boolean;
+        batchExpectations?: boolean;
+        maxCacheAge?: number;
     };
 
     // Reporting
@@ -142,12 +210,12 @@ export interface AIProvider {
     /**
      * Locate element using natural language description
      */
-    locateElement(page: Page, description: string): Promise<string>;
+    locateElement(page: Page, description: string, taskType?: AITaskType): Promise<string>;
 
     /**
      * Validate expectation against page state
      */
-    validateExpectation(page: Page, expectation: string, screenshot?: string): Promise<boolean>;
+    validateExpectation(page: Page, expectation: string, screenshot?: string, taskType?: AITaskType): Promise<boolean>;
 
     /**
      * Analyze test failure
@@ -156,13 +224,14 @@ export interface AIProvider {
         testName: string,
         error: Error,
         screenshot?: string,
-        pageContent?: string
+        pageContent?: string,
+        taskType?: AITaskType
     ): Promise<FailureAnalysis>;
 
     /**
      * Compare screenshots for visual regression
      */
-    compareScreenshots(baseline: string, current: string): Promise<{
+    compareScreenshots(baseline: string, current: string, taskType?: AITaskType): Promise<{
         similar: boolean;
         difference: number;
         analysis: string;

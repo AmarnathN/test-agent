@@ -22,8 +22,9 @@ export class CustomLLMProvider extends BaseAIProvider {
      * Locate element using custom LLM
      * TODO: Implement your custom LLM API call here
      */
-    async locateElement(page: Page, description: string): Promise<string> {
-        const context = await this.getPageContext(page);
+    async locateElement(page: Page, description: string, _taskType?: any): Promise<string> {
+        // Unused context for template
+        // const _context = await this.getPageContext(page);
 
         // Get all interactive elements
         const elements = await page.evaluate(() => {
@@ -62,7 +63,8 @@ export class CustomLLMProvider extends BaseAIProvider {
     async validateExpectation(
         page: Page,
         expectation: string,
-        screenshot?: string
+        _screenshot?: string,
+        _taskType?: any
     ): Promise<boolean> {
         const context = await this.getPageContext(page);
 
@@ -81,8 +83,9 @@ export class CustomLLMProvider extends BaseAIProvider {
     async analyzeFailure(
         testName: string,
         error: Error,
-        screenshot?: string,
-        pageContent?: string
+        _screenshot?: string,
+        _pageContent?: string,
+        _taskType?: any
     ): Promise<FailureAnalysis> {
         const prompt = `Test: ${testName}\nError: ${error.message}\nStack: ${error.stack}\nAnalyze this failure.`;
 
@@ -103,8 +106,9 @@ export class CustomLLMProvider extends BaseAIProvider {
      * TODO: Implement your custom LLM vision API call here
      */
     async compareScreenshots(
-        baseline: string,
-        current: string
+        _baseline: string,
+        _current: string,
+        _taskType?: any
     ): Promise<{ similar: boolean; difference: number; analysis: string }> {
         // TODO: Replace with your custom LLM vision API call
         // This is a placeholder implementation
@@ -144,7 +148,7 @@ export class CustomLLMProvider extends BaseAIProvider {
                 throw new Error(`Custom LLM API error: ${response.statusText}`);
             }
 
-            const data = await response.json();
+            const data: any = await response.json();
 
             // TODO: Extract the response text from your LLM's response format
             // This is a placeholder - adjust based on your API response structure
