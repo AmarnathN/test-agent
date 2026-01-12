@@ -33,6 +33,10 @@ export interface BrowserAgent {
     wait(milliseconds: number): Promise<void>;
     waitFor(target: string, options?: WaitOptions): Promise<void>;
     expect(expectation: string): Promise<void>;
+    expectNavigation(urlOrTitle: string): Promise<void>;
+    expectText(text: string, selector?: string): Promise<void>;
+    expectVisibility(selector: string, isVisible?: boolean): Promise<void>;
+    expectVisual(description: string): Promise<void>;
     screenshot(name?: string): Promise<string>;
     getPage(): Page;
 }
