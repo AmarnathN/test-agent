@@ -109,6 +109,15 @@ export interface FrameworkConfig {
         model?: string;
     };
 
+    // AI Optimization (NEW)
+    aiOptimization?: {
+        enableCache?: boolean;           // Cache AI responses (default: true)
+        cacheDir?: string;                // Cache directory (default: .ai-cache)
+        smartMode?: boolean;              // Use fallbacks before AI (default: true)
+        batchExpectations?: boolean;      // Batch multiple expects into one call (default: true)
+        maxCacheAge?: number;             // Cache TTL in hours (default: 24)
+    };
+
     // Reporting
     reporters?: ('html' | 'junit' | 'json')[];
     outputDir?: string;

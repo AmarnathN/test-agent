@@ -36,3 +36,4 @@ npm-debug.log*
 ai-test-results/
 screenshots/
 videos/
+.ai-cache/          # AI selector cache (optional: commit for team sharing)

@@ -29,26 +29,20 @@ export class BrowserAgent implements IBrowserAgent {
     }
 
     /**
-     * Click an element using natural language description
-     */
+   * Click an element using natural language description
+   */
     async click(target: string): Promise<void> {
         this.logger.info(`Clicking: ${target}`);
 
         try {
-            // Try to locate element using AI
-            const selector = await this.aiProvider.locateElement(this.page, target);
+            // Try learned selectors first (no LLM call)
+            const selector = await this.findElementOptimized(target);
             await this.page.click(selector);
 
             // Wait for potential navigation or network activity
             await this.page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => { });
         } catch (error) {
-            // Fallback: try common selectors
-            const fallbackSelector = await this.tryFallbackSelectors(target);
-            if (fallbackSelector) {
-                await this.page.click(fallbackSelector);
-            } else {
-                throw new Error(`Failed to click element: ${target}. ${error}`);
-            }
+            throw new Error(`Failed to click element: ${target}. ${error}`);
         }
     }
 
@@ -59,15 +53,10 @@ export class BrowserAgent implements IBrowserAgent {
         this.logger.info(`Filling "${target}" with: ${value}`);
 
         try {
-            const selector = await this.aiProvider.locateElement(this.page, target);
+            const selector = await this.findElementOptimized(target);
             await this.page.fill(selector, value);
         } catch (error) {
-            const fallbackSelector = await this.tryFallbackSelectors(target);
-            if (fallbackSelector) {
-                await this.page.fill(fallbackSelector, value);
-            } else {
-                throw new Error(`Failed to fill element: ${target}. ${error}`);
-            }
+            throw new Error(`Failed to fill element: ${target}. ${error}`);
         }
     }
 
@@ -78,7 +67,7 @@ export class BrowserAgent implements IBrowserAgent {
         this.logger.info(`Selecting "${value}" in: ${target}`);
 
         try {
-            const selector = await this.aiProvider.locateElement(this.page, target);
+            const selector = await this.findElementOptimized(target);
             await this.page.selectOption(selector, value);
         } catch (error) {
             throw new Error(`Failed to select option in: ${target}. ${error}`);
@@ -92,7 +81,7 @@ export class BrowserAgent implements IBrowserAgent {
         this.logger.info(`Hovering over: ${target}`);
 
         try {
-            const selector = await this.aiProvider.locateElement(this.page, target);
+            const selector = await this.findElementOptimized(target);
             await this.page.hover(selector);
         } catch (error) {
             throw new Error(`Failed to hover over: ${target}. ${error}`);
@@ -171,10 +160,66 @@ export class BrowserAgent implements IBrowserAgent {
     }
 
     /**
-     * Get all screenshots taken during test
-     */
+   * Get all screenshots taken during test
+   */
     getScreenshots(): string[] {
         return this.screenshots;
+    }
+
+    /**
+     * Set selector cache for learning
+     */
+    setSelectorCache(cache: any): void {
+        (this as any).selectorCache = cache;
+    }
+
+    /**
+     * Optimized element finding with caching
+     * Priority: 1) Learned selectors, 2) Fallback patterns, 3) AI
+     */
+    private async findElementOptimized(description: string): Promise<string> {
+        const url = this.page.url();
+
+        // 1. Try learned selectors first (no LLM call!)
+        const selectorCache = (this as any).selectorCache;
+        if (selectorCache) {
+            const learnedSelectors = selectorCache.getSelectors(description, url);
+            for (const selector of learnedSelectors) {
+                try {
+                    const element = await this.page.$(selector);
+                    if (element) {
+                        this.logger.debug(`Using learned selector: ${selector}`);
+                        return selector;
+                    }
+                } catch (e) {
+                    // Continue to next selector
+                }
+            }
+        }
+
+        // 2. Try fallback patterns (no LLM call!)
+        const fallbackSelector = await this.tryFallbackSelectors(description);
+        if (fallbackSelector) {
+            this.logger.debug(`Using fallback selector: ${fallbackSelector}`);
+
+            // Learn this selector for future use
+            if (selectorCache) {
+                selectorCache.recordSuccess(description, url, fallbackSelector);
+            }
+
+            return fallbackSelector;
+        }
+
+        // 3. Finally, use AI (LLM call - expensive!)
+        this.logger.debug(`Using AI to locate: ${description}`);
+        const aiSelector = await this.aiProvider.locateElement(this.page, description);
+
+        // Learn this selector for future use
+        if (selectorCache) {
+            selectorCache.recordSuccess(description, url, aiSelector);
+        }
+
+        return aiSelector;
     }
 
     /**

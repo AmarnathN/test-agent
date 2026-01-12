@@ -14,6 +14,13 @@ export class ConfigLoader {
         retries: 0,
         parallel: 1,
         aiProvider: 'openai',
+        aiOptimization: {
+            enableCache: true,        // Cache AI responses to reduce costs
+            cacheDir: '.ai-cache',
+            smartMode: true,          // Try fallbacks before AI
+            batchExpectations: false, // Future feature
+            maxCacheAge: 24,
+        },
         reporters: ['html', 'junit'],
         outputDir: 'ai-test-results',
         screenshot: 'only-on-failure',

@@ -5,6 +5,7 @@ import { OpenAIProvider } from '../ai/OpenAIProvider';
 import { CustomLLMProvider } from '../ai/CustomLLMProvider';
 import { BaseAIProvider } from '../ai/AIProvider';
 import { Logger } from '../utils/Logger';
+import { AICache, SelectorCache } from '../utils/AICache';
 import { testRegistry } from '../dsl/TestCollector';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -17,10 +18,23 @@ export class TestRunner {
     private browser?: Browser;
     private aiProvider: BaseAIProvider;
     private logger: Logger;
+    private aiCache: AICache;
+    private selectorCache: SelectorCache;
 
     constructor(config: FrameworkConfig) {
         this.config = config;
         this.logger = new Logger();
+
+        // Initialize caching (NEW - reduces LLM costs!)
+        const cacheEnabled = config.aiOptimization?.enableCache !== false;
+        const cacheDir = config.aiOptimization?.cacheDir || '.ai-cache';
+
+        this.aiCache = new AICache(cacheDir, cacheEnabled);
+        this.selectorCache = new SelectorCache(cacheDir);
+
+        if (cacheEnabled) {
+            this.logger.info('AI caching enabled - this will reduce LLM costs significantly');
+        }
 
         // Initialize AI provider based on config
         if (config.aiProvider === 'openai' && config.openai) {
@@ -117,6 +131,9 @@ export class TestRunner {
 
             // Create browser agent
             const agent = new BrowserAgent(page, context, this.aiProvider, testLogger);
+
+            // Enable selector learning (NEW - reduces LLM calls!)
+            agent.setSelectorCache(this.selectorCache);
 
             // Create test context
             const testContext: TestContext = {
