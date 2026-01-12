@@ -109,9 +109,10 @@ export class AICache {
 
 /**
  * Selector learning cache - remembers successful selectors
+ * Enhanced with confidence scores and verification timestamps
  */
 export class SelectorCache {
-    private selectors: Map<string, string[]> = new Map();
+    private selectors: Map<string, SelectorEntry[]> = new Map();
     private cacheFile: string;
 
     constructor(cacheDir: string = '.ai-cache') {
@@ -122,25 +123,69 @@ export class SelectorCache {
     /**
      * Get learned selectors for a description
      */
-    getSelectors(description: string, url: string): string[] {
+    getSelectors(description: string, url: string): SelectorEntry[] {
         const key = this.makeKey(description, url);
         return this.selectors.get(key) || [];
     }
 
     /**
-     * Record a successful selector
+     * Record a successful selector with metadata
      */
-    recordSuccess(description: string, url: string, selector: string): void {
+    recordSuccess(
+        description: string,
+        url: string,
+        selector: string,
+        source: 'ai' | 'fallback' | 'manual' = 'ai'
+    ): void {
         const key = this.makeKey(description, url);
         const existing = this.selectors.get(key) || [];
 
-        // Add to front of list (most recent first)
-        if (!existing.includes(selector)) {
-            existing.unshift(selector);
+        // Check if selector already exists
+        const existingEntry = existing.find(e => e.selector === selector);
+
+        if (existingEntry) {
+            // Update existing entry
+            existingEntry.useCount++;
+            existingEntry.lastVerified = new Date().toISOString();
+            existingEntry.confidence = Math.min(0.99, existingEntry.confidence + 0.01);
+        } else {
+            // Add new entry
+            const newEntry: SelectorEntry = {
+                selector,
+                confidence: source === 'ai' ? 0.95 : 0.90,
+                lastVerified: new Date().toISOString(),
+                source,
+                useCount: 1,
+            };
+
+            existing.unshift(newEntry);
             // Keep only top 5 selectors
             this.selectors.set(key, existing.slice(0, 5));
-            this.save();
         }
+
+        this.save();
+    }
+
+    /**
+     * Record a selector failure (reduces confidence)
+     */
+    recordFailure(description: string, url: string, selector: string): void {
+        const key = this.makeKey(description, url);
+        const existing = this.selectors.get(key) || [];
+
+        const entry = existing.find(e => e.selector === selector);
+        if (entry) {
+            entry.confidence = Math.max(0.1, entry.confidence - 0.2);
+            entry.lastVerified = new Date().toISOString();
+
+            // Remove if confidence too low
+            if (entry.confidence < 0.3) {
+                const filtered = existing.filter(e => e.selector !== selector);
+                this.selectors.set(key, filtered);
+            }
+        }
+
+        this.save();
     }
 
     /**
@@ -160,7 +205,21 @@ export class SelectorCache {
             try {
                 const data = fs.readFileSync(this.cacheFile, 'utf-8');
                 const parsed = JSON.parse(data);
-                this.selectors = new Map(Object.entries(parsed));
+
+                // Convert to Map with SelectorEntry objects
+                this.selectors = new Map(
+                    Object.entries(parsed).map(([key, value]) => {
+                        // Handle both old format (string[]) and new format (SelectorEntry[])
+                        const entries = Array.isArray(value)
+                            ? value.map(v =>
+                                typeof v === 'string'
+                                    ? { selector: v, confidence: 0.90, lastVerified: new Date().toISOString(), source: 'legacy' as const, useCount: 1 }
+                                    : v as SelectorEntry
+                            )
+                            : [];
+                        return [key, entries];
+                    })
+                );
             } catch (error) {
                 console.warn('Failed to load selector cache:', error);
             }
@@ -183,4 +242,15 @@ export class SelectorCache {
             console.warn('Failed to save selector cache:', error);
         }
     }
+}
+
+/**
+ * Selector entry with metadata
+ */
+interface SelectorEntry {
+    selector: string;
+    confidence: number;      // 0.0 - 1.0
+    lastVerified: string;    // ISO timestamp
+    source: 'ai' | 'fallback' | 'manual' | 'legacy';
+    useCount: number;
 }

@@ -174,25 +174,42 @@ export class BrowserAgent implements IBrowserAgent {
     }
 
     /**
-     * Optimized element finding with caching
-     * Priority: 1) Learned selectors, 2) Fallback patterns, 3) AI
-     */
+   * Optimized element finding with caching
+   * Priority: 1) Learned selectors, 2) Fallback patterns, 3) AI
+   */
     private async findElementOptimized(description: string): Promise<string> {
         const url = this.page.url();
 
         // 1. Try learned selectors first (no LLM call!)
         const selectorCache = (this as any).selectorCache;
         if (selectorCache) {
-            const learnedSelectors = selectorCache.getSelectors(description, url);
-            for (const selector of learnedSelectors) {
+            const learnedEntries = selectorCache.getSelectors(description, url);
+
+            // Try selectors in order of confidence
+            for (const entry of learnedEntries) {
                 try {
+                    const selector = typeof entry === 'string' ? entry : entry.selector;
                     const element = await this.page.$(selector);
                     if (element) {
-                        this.logger.debug(`Using learned selector: ${selector}`);
+                        this.logger.debug(`Using learned selector (confidence: ${typeof entry === 'object' ? entry.confidence : 'N/A'}): ${selector}`);
+
+                        // Record success to boost confidence
+                        if (typeof entry === 'object') {
+                            selectorCache.recordSuccess(description, url, selector, entry.source);
+                        }
+
                         return selector;
+                    } else {
+                        // Selector didn't work, reduce confidence
+                        if (typeof entry === 'object') {
+                            selectorCache.recordFailure(description, url, selector);
+                        }
                     }
                 } catch (e) {
-                    // Continue to next selector
+                    // Selector failed, try next one
+                    if (typeof entry === 'object') {
+                        selectorCache.recordFailure(description, url, entry.selector);
+                    }
                 }
             }
         }
@@ -204,7 +221,7 @@ export class BrowserAgent implements IBrowserAgent {
 
             // Learn this selector for future use
             if (selectorCache) {
-                selectorCache.recordSuccess(description, url, fallbackSelector);
+                selectorCache.recordSuccess(description, url, fallbackSelector, 'fallback');
             }
 
             return fallbackSelector;
@@ -216,7 +233,7 @@ export class BrowserAgent implements IBrowserAgent {
 
         // Learn this selector for future use
         if (selectorCache) {
-            selectorCache.recordSuccess(description, url, aiSelector);
+            selectorCache.recordSuccess(description, url, aiSelector, 'ai');
         }
 
         return aiSelector;
