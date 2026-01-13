@@ -159,6 +159,7 @@ export interface FrameworkConfig {
             enabled?: boolean;     // if undefined, auto-detect
             disableVision?: boolean;
             maxPremiumCallsPerTest?: number;
+            readOnlyCache?: boolean;
         };
     };
 

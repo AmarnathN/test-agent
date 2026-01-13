@@ -5,7 +5,7 @@ import { OpenAIProvider } from '../ai/OpenAIProvider';
 import { CustomLLMProvider } from '../ai/CustomLLMProvider';
 import { BaseAIProvider } from '../ai/AIProvider';
 import { Logger } from '../utils/Logger';
-import { SelectorCache } from '../utils/AICache';
+import { SelectorCache } from '../cache/SelectorCache';
 import { testRegistry } from '../dsl/TestCollector';
 import * as path from 'path';
 
@@ -27,10 +27,13 @@ export class TestRunner {
         const cacheEnabled = config.aiOptimization?.enableCache !== false;
         const cacheDir = config.aiOptimization?.cacheDir || '.ai-cache';
 
-        this.selectorCache = new SelectorCache(cacheDir);
+        // CI Mode read-only check
+        const isReadOnly = config.ai?.ciMode?.readOnlyCache || false;
+
+        this.selectorCache = new SelectorCache(cacheDir, isReadOnly);
 
         if (cacheEnabled) {
-            this.logger.info('AI caching enabled - this will reduce LLM costs significantly');
+            this.logger.info(`AI caching enabled (ReadOnly: ${isReadOnly}) - this will reduce LLM costs significantly`);
         }
 
         // Initialize AI provider based on config

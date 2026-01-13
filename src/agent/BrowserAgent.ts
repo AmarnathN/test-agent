@@ -2,6 +2,7 @@ import { Page, BrowserContext } from '@playwright/test';
 import { BrowserAgent as IBrowserAgent, WaitOptions, AITaskType } from '../types';
 import { BaseAIProvider } from '../ai/AIProvider';
 import { Logger } from '../utils/Logger';
+import { SelectorCache, SelectorEntry } from '../cache/SelectorCache';
 
 /**
  * AI-powered browser agent for intelligent UI interactions
@@ -11,6 +12,7 @@ export class BrowserAgent implements IBrowserAgent {
     private aiProvider: BaseAIProvider;
     private logger: Logger;
     private screenshots: string[] = [];
+    private selectorCache?: SelectorCache;
 
     constructor(page: Page, _context: BrowserContext, aiProvider: BaseAIProvider, logger: Logger) {
         this.page = page;
@@ -27,13 +29,13 @@ export class BrowserAgent implements IBrowserAgent {
     }
 
     /**
-   * Click an element using natural language description
-   */
+     * Click an element using natural language description
+     */
     async click(target: string): Promise<void> {
         this.logger.info(`Clicking: ${target}`);
 
         try {
-            // Try learned selectors first (no LLM call)
+            // Try learned selectors first (includes AI fallback)
             const selector = await this.findElementOptimized(target);
             await this.page.click(selector);
 
@@ -123,9 +125,6 @@ export class BrowserAgent implements IBrowserAgent {
         }
     }
 
-    /**
-     * Validate an expectation using AI
-     */
     /**
      * Validate an expectation
      * Smartly routes to specific expectation types to reduce AI costs
@@ -268,8 +267,8 @@ export class BrowserAgent implements IBrowserAgent {
     }
 
     /**
-   * Get all screenshots taken during test
-   */
+     * Get all screenshots taken during test
+     */
     getScreenshots(): string[] {
         return this.screenshots;
     }
@@ -277,65 +276,115 @@ export class BrowserAgent implements IBrowserAgent {
     /**
      * Set selector cache for learning
      */
-    setSelectorCache(cache: any): void {
-        (this as any).selectorCache = cache;
+    setSelectorCache(cache: SelectorCache): void {
+        this.selectorCache = cache;
     }
 
     /**
-   * Optimized element finding with caching
-   * Priority: 1) Learned selectors, 2) Fallback patterns, 3) AI
-   */
+     * Optimized element finding with caching
+     */
     private async findElementOptimized(description: string): Promise<string> {
-        const url = this.page.url();
+        // Construct localized intent key
+        const domain = new URL(this.page.url()).hostname;
+        const intent = `${domain}:${description.trim().toLowerCase()}`;
 
-        // 1. Try learned selectors first (no LLM call!)
-        const selectorCache = (this as any).selectorCache;
-        if (selectorCache) {
-            const learnedEntries = selectorCache.getSelectors(description, url);
+        // 1. Try cached selectors
+        if (this.selectorCache) {
+            const cached = this.selectorCache.get(intent);
 
-            // Try selectors in order of confidence
-            for (const entry of learnedEntries) {
-                try {
-                    const selector = typeof entry === 'string' ? entry : entry.selector;
-                    const element = await this.page.$(selector);
-                    if (element) {
-                        this.logger.debug(`Using learned selector (confidence: ${typeof entry === 'object' ? entry.confidence : 'N/A'}): ${selector}`);
+            if (cached && cached.selectors.length > 0) {
+                // Sort selectors by confidence and success rate
+                const sortedSelectors = [...cached.selectors].sort((a, b) => {
+                    // Primary: Confidence
+                    if (b.confidence !== a.confidence) return b.confidence - a.confidence;
+                    // Secondary: Success Ratio
+                    const scoreA = a.successCount - a.failureCount;
+                    const scoreB = b.successCount - b.failureCount;
+                    return scoreB - scoreA;
+                });
 
-                        // Record success to boost confidence
-                        if (typeof entry === 'object') {
-                            selectorCache.recordSuccess(description, url, selector, entry.source);
+                let cacheDirty = false;
+                let foundSelector: string | null = null;
+
+                for (const s of sortedSelectors) {
+                    try {
+                        const el = this.page.locator(s.selector).first();
+                        // Short timeout for cached checks to stay fast
+                        await el.waitFor({ timeout: 2000, state: 'visible' });
+
+                        this.logger.debug(`Cache hit: "${description}" -> ${s.selector}`);
+
+                        // Update Success Stats
+                        s.successCount++;
+                        s.lastVerified = Date.now();
+
+                        // Boost confidence slightly on success, cap at 1.0
+                        s.confidence = Math.min(1.0, s.confidence + 0.01);
+
+                        cacheDirty = true;
+                        foundSelector = s.selector;
+                        break;
+
+                    } catch {
+                        // Update Failure Stats
+                        s.failureCount++;
+
+                        // Decay confidence on failure
+                        if (s.failureCount > 3) {
+                            s.confidence *= 0.8;
+                        } else {
+                            s.confidence *= 0.95;
                         }
 
-                        return selector;
-                    } else {
-                        // Selector didn't work, reduce confidence
-                        if (typeof entry === 'object') {
-                            selectorCache.recordFailure(description, url, selector);
-                        }
-                    }
-                } catch (e) {
-                    // Selector failed, try next one
-                    if (typeof entry === 'object') {
-                        selectorCache.recordFailure(description, url, entry.selector);
+                        this.logger.debug(`Cache miss (stale): ${s.selector}`);
+                        cacheDirty = true;
                     }
                 }
+
+                if (cacheDirty) {
+                    // Auto-evict low confidence selectors
+                    cached.selectors = cached.selectors.filter(s => s.confidence >= 0.4);
+                    this.selectorCache.update(cached);
+                }
+
+                if (foundSelector) return foundSelector;
             }
         }
 
-        // 2. Try fallback patterns (no LLM call!)
+        // 2. Fallback Patterns (Fast heuristics before AI)
         const fallbackSelector = await this.tryFallbackSelectors(description);
         if (fallbackSelector) {
-            this.logger.debug(`Using fallback selector: ${fallbackSelector}`);
+            // Learn Fallback
+            if (this.selectorCache) {
+                const existingEntry = this.selectorCache.get(intent);
+                const type = (fallbackSelector.startsWith('//') || fallbackSelector.startsWith('xpath=')) ? 'xpath' : 'css';
 
-            // Learn this selector for future use
-            if (selectorCache) {
-                selectorCache.recordSuccess(description, url, fallbackSelector, 'fallback');
+                const newEntry: SelectorEntry = {
+                    selector: fallbackSelector,
+                    confidence: 0.6,
+                    successCount: 1,
+                    failureCount: 0,
+                    lastVerified: Date.now(),
+                    source: 'manual',
+                    selectorType: type as any
+                };
+
+                if (existingEntry) {
+                    if (!existingEntry.selectors.find(s => s.selector === fallbackSelector)) {
+                        existingEntry.selectors.push(newEntry);
+                        this.selectorCache.update(existingEntry);
+                    }
+                } else {
+                    this.selectorCache.update({
+                        intent,
+                        selectors: [newEntry]
+                    });
+                }
             }
-
             return fallbackSelector;
         }
 
-        // 3. Finally, use AI (LLM call - expensive!)
+        // 3. AI Resolution (Expensive)
         this.logger.debug(`Using AI to locate: ${description}`);
         const aiSelector = await this.aiProvider.locateElement(
             this.page,
@@ -343,9 +392,41 @@ export class BrowserAgent implements IBrowserAgent {
             AITaskType.ELEMENT_RESOLUTION
         );
 
-        // Learn this selector for future use
-        if (selectorCache) {
-            selectorCache.recordSuccess(description, url, aiSelector, 'ai');
+        // Verify AI Selector before caching
+        try {
+            // Immediate validation
+            const el = this.page.locator(aiSelector).first();
+            await el.waitFor({ timeout: 3000, state: 'visible' });
+
+            // Use AI Selector & Cache it
+            if (this.selectorCache) {
+                const existingEntry = this.selectorCache.get(intent);
+                const type = (aiSelector.startsWith('//') || aiSelector.startsWith('xpath=')) ? 'xpath' : 'css';
+
+                const newSelectorEntry: SelectorEntry = {
+                    selector: aiSelector,
+                    confidence: 0.85, // Start conservative
+                    successCount: 0,  // Verified once but allow history to build
+                    failureCount: 0,
+                    lastVerified: Date.now(),
+                    source: 'ai',
+                    selectorType: type as any
+                };
+
+                if (existingEntry) {
+                    if (!existingEntry.selectors.find(s => s.selector === aiSelector)) {
+                        existingEntry.selectors.push(newSelectorEntry);
+                        this.selectorCache.update(existingEntry);
+                    }
+                } else {
+                    this.selectorCache.update({
+                        intent,
+                        selectors: [newSelectorEntry]
+                    });
+                }
+            }
+        } catch (e) {
+            this.logger.warn(`AI selector "${aiSelector}" failed immediate verification. Not caching.`);
         }
 
         return aiSelector;
@@ -365,8 +446,6 @@ export class BrowserAgent implements IBrowserAgent {
      * Fallback method to try common selectors when AI fails
      */
     private async tryFallbackSelectors(description: string): Promise<string | null> {
-        // const _lowerDesc = description.toLowerCase();
-
         // Try common patterns
         const patterns = [
             `button:has-text("${description}")`,
