@@ -9,6 +9,8 @@ export interface SelectorEntry {
     lastVerified: number;      // epoch millis
     source: "ai" | "manual";
     selectorType?: 'css' | 'xpath' | 'text' | 'aria';
+    aiProvider?: string;
+    model?: string;
 }
 
 export interface SelectorCacheEntry {

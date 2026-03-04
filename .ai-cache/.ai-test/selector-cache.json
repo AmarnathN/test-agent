@@ -5,12 +5,14 @@
       "selectors": [
         {
           "selector": "input[type=\"email\"]",
-          "confidence": 0.88,
-          "successCount": 3,
+          "confidence": 0.86,
+          "successCount": 1,
           "failureCount": 0,
-          "lastVerified": 1772608309624,
+          "lastVerified": 1772611118930,
           "source": "ai",
-          "selectorType": "css"
+          "selectorType": "css",
+          "aiProvider": "customllm",
+          "model": "openai/gpt-oss-120b"
         }
       ]
     },
@@ -18,13 +20,15 @@
       "intent": "ap-frontend-mu.vercel.app:password field",
       "selectors": [
         {
-          "selector": "input[name=\"password\"]",
-          "confidence": 0.88,
-          "successCount": 3,
+          "selector": "#password",
+          "confidence": 0.86,
+          "successCount": 1,
           "failureCount": 0,
-          "lastVerified": 1772608310137,
+          "lastVerified": 1772611119446,
           "source": "ai",
-          "selectorType": "css"
+          "selectorType": "css",
+          "aiProvider": "customllm",
+          "model": "openai/gpt-oss-120b"
         }
       ]
     },
@@ -32,58 +36,34 @@
       "intent": "ap-frontend-mu.vercel.app:sign in button",
       "selectors": [
         {
-          "selector": "button:text(\"Sign in\")",
-          "confidence": 0.88,
-          "successCount": 3,
-          "failureCount": 0,
-          "lastVerified": 1772608310651,
-          "source": "ai",
-          "selectorType": "css"
-        }
-      ]
-    },
-    "ap-frontend-mu.vercel.app:alert with text \"login success\"": {
-      "intent": "ap-frontend-mu.vercel.app:alert with text \"login success\"",
-      "selectors": [
-        {
-          "selector": "[role=\"alert\"]",
-          "confidence": 0.85,
-          "successCount": 0,
-          "failureCount": 0,
-          "lastVerified": 1772608228728,
-          "source": "ai",
-          "selectorType": "css"
-        }
-      ]
-    },
-    "ap-frontend-mu.vercel.app:alert with text \"login failed\"": {
-      "intent": "ap-frontend-mu.vercel.app:alert with text \"login failed\"",
-      "selectors": [
-        {
-          "selector": "[role=\"alert\"]:has-text(\"Login Failed\")",
+          "selector": "button:has-text(\"Sign in\")",
           "confidence": 0.86,
           "successCount": 1,
           "failureCount": 0,
-          "lastVerified": 1772608312396,
+          "lastVerified": 1772611119962,
           "source": "ai",
-          "selectorType": "css"
+          "selectorType": "css",
+          "aiProvider": "customllm",
+          "model": "openai/gpt-oss-120b"
         }
       ]
     },
-    "ap-frontend-mu.vercel.app:toast with text \"login success\"": {
-      "intent": "ap-frontend-mu.vercel.app:toast with text \"login success\"",
+    "ap-frontend-mu.vercel.app:text \"login failed\"": {
+      "intent": "ap-frontend-mu.vercel.app:text \"login failed\"",
       "selectors": [
         {
-          "selector": "[role=\"alert\"]",
+          "selector": ":has-text(\"Login Failed\")",
           "confidence": 0.85,
           "successCount": 0,
           "failureCount": 0,
-          "lastVerified": 1772608307058,
+          "lastVerified": 1772611130841,
           "source": "ai",
-          "selectorType": "css"
+          "selectorType": "css",
+          "aiProvider": "customllm",
+          "model": "openai/gpt-oss-120b"
         }
       ]
     }
   },
-  "updatedAt": 1772608312396
+  "updatedAt": 1772611130841
 }

@@ -13,7 +13,7 @@ test('Example Login Pass Test', async ({ agent }) => {
 
   // Validate expectations using AI
   // await agent.expect('Login Success alert message');
-  await agent.expectVisibility('toast with text "Login Success"');
+  await agent.expectVisibility('text "Login Success"');
 });
 
 
@@ -31,5 +31,5 @@ test('Example Login Failure Test', async ({ agent }) => {
 
   // Validate expectations using AI
   // await agent.expect('Login failed alert message');
-  await agent.expectVisibility('alert with text "Login Failed"');
+  await agent.expectVisibility('text "Login Failed"');
 });

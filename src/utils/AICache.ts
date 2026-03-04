@@ -135,7 +135,9 @@ export class SelectorCache {
         description: string,
         url: string,
         selector: string,
-        source: 'ai' | 'fallback' | 'manual' = 'ai'
+        source: 'ai' | 'fallback' | 'manual' = 'ai',
+        aiProvider?: string,
+        model?: string
     ): void {
         const key = this.makeKey(description, url);
         const existing = this.selectors.get(key) || [];
@@ -148,6 +150,8 @@ export class SelectorCache {
             existingEntry.useCount++;
             existingEntry.lastVerified = new Date().toISOString();
             existingEntry.confidence = Math.min(0.99, existingEntry.confidence + 0.01);
+            if (aiProvider) existingEntry.aiProvider = aiProvider;
+            if (model) existingEntry.model = model;
         } else {
             // Add new entry
             const newEntry: SelectorEntry = {
@@ -156,6 +160,8 @@ export class SelectorCache {
                 lastVerified: new Date().toISOString(),
                 source,
                 useCount: 1,
+                aiProvider,
+                model
             };
 
             existing.unshift(newEntry);
@@ -253,4 +259,6 @@ interface SelectorEntry {
     lastVerified: string;    // ISO timestamp
     source: 'ai' | 'fallback' | 'manual' | 'legacy';
     useCount: number;
+    aiProvider?: string;
+    model?: string;
 }

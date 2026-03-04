@@ -12,17 +12,17 @@ module.exports = {
   parallel: 1,
 
   // AI Provider
-  aiProvider: 'openai', // 'openai' or 'custom'
-  openai: {
-    apiKey: process.env.OPENAI_API_KEY,
-    model: 'gpt-4-turbo-preview',
-  },
-  // Uncomment to use custom LLM
-  // customLLM: {
-  //   endpoint: process.env.CUSTOM_LLM_ENDPOINT,
-  //   apiKey: process.env.CUSTOM_LLM_API_KEY,
-  //   model: 'your-model',
+  aiProvider: 'custom', // 'openai' or 'custom'
+  // openai: {
+  //   apiKey: process.env.OPENAI_API_KEY,
+  //   model: 'gpt-4-turbo-preview',
   // },
+  // Uncomment to use custom LLM
+  customLLM: {
+    endpoint: process.env.CUSTOM_LLM_ENDPOINT,
+    apiKey: process.env.CUSTOM_LLM_API_KEY,
+    model: process.env.CUSTOM_LLM_MODEL,
+  },
 
   // Reporting
   reporters: ['html', 'junit'],

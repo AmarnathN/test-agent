@@ -227,7 +227,7 @@ export interface AIProvider {
     /**
      * Locate element using natural language description
      */
-    locateElement(page: Page, description: string, taskType?: AITaskType): Promise<string>;
+    locateElement(page: Page, description: string, taskType?: AITaskType): Promise<{ selector: string, model: string }>;
 
     /**
      * Validate expectation against page state

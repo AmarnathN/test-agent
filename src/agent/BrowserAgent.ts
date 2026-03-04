@@ -131,7 +131,7 @@ export class BrowserAgent implements IBrowserAgent {
     async waitFor(target: string, options?: WaitOptions): Promise<void> {
         this.logger.info(`Waiting for: ${target}`);
         await this.recordStep('waitFor', `Wait for "${target}"`, async () => {
-            const selector = await this.aiProvider.locateElement(this.page, target, AITaskType.ELEMENT_RESOLUTION);
+            const { selector } = await this.aiProvider.locateElement(this.page, target, AITaskType.ELEMENT_RESOLUTION);
             await this.page.waitForSelector(selector, {
                 timeout: options?.timeout || 30000,
                 state: options?.state || 'visible',
@@ -402,7 +402,7 @@ export class BrowserAgent implements IBrowserAgent {
 
         // 3. AI Resolution (Expensive)
         this.logger.debug(`Using AI to locate: ${description}`);
-        const aiSelector = await this.aiProvider.locateElement(
+        const { selector: aiSelector, model: aiModel } = await this.aiProvider.locateElement(
             this.page,
             description,
             AITaskType.ELEMENT_RESOLUTION
@@ -426,7 +426,9 @@ export class BrowserAgent implements IBrowserAgent {
                     failureCount: 0,
                     lastVerified: Date.now(),
                     source: 'ai',
-                    selectorType: type as any
+                    selectorType: type as any,
+                    aiProvider: this.aiProvider.constructor.name.replace('Provider', '').toLowerCase(),
+                    model: aiModel
                 };
 
                 if (existingEntry) {

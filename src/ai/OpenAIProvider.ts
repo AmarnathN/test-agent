@@ -83,7 +83,7 @@ export class OpenAIProvider extends BaseAIProvider {
     /**
      * Locate element using AI-powered natural language understanding
      */
-    async locateElement(page: Page, description: string, taskType: AITaskType = AITaskType.ELEMENT_RESOLUTION): Promise<string> {
+    async locateElement(page: Page, description: string, taskType: AITaskType = AITaskType.ELEMENT_RESOLUTION): Promise<{ selector: string, model: string }> {
         const model = this.resolveModel(taskType);
         const context = await this.getPageContext(page);
 
@@ -280,7 +280,7 @@ Respond with ONLY the selector string. No markdown, no explanation, no backticks
         for (const candidate of candidates) {
             try {
                 await page.waitForSelector(candidate, { timeout: 2000 });
-                return candidate; // ← first one that works wins
+                return { selector: candidate, model }; // ← first one that works wins
             } catch {
                 // try next candidate
             }

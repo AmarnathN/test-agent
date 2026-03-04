@@ -12,14 +12,7 @@ export abstract class BaseAIProvider implements AIProvider {
         this.config = config;
     }
 
-    /**
-     * Locate element using natural language description
-     * @param page - Playwright page object
-     * @param description - Natural language description of the element
-     * @param taskType - Optional task type for routing
-     * @returns CSS selector or other locator strategy
-     */
-    abstract locateElement(page: Page, description: string, taskType?: any): Promise<string>;
+    abstract locateElement(page: Page, description: string, taskType?: any): Promise<{ selector: string, model: string }>;
 
     /**
      * Validate expectation against page state

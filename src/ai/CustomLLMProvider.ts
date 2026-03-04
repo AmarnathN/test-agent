@@ -22,7 +22,7 @@ export class CustomLLMProvider extends BaseAIProvider {
      * Locate element using custom LLM
      * TODO: Implement your custom LLM API call here
      */
-    async locateElement(page: Page, description: string, _taskType?: any): Promise<string> {
+    async locateElement(page: Page, description: string, _taskType?: any): Promise<{ selector: string, model: string }> {
         // Unused context for template
         // const _context = await this.getPageContext(page);
 
@@ -50,7 +50,7 @@ export class CustomLLMProvider extends BaseAIProvider {
         // Validate selector
         try {
             await page.waitForSelector(selector, { timeout: 2000 });
-            return selector;
+            return { selector, model: this.model };
         } catch (error) {
             throw new Error(`Custom LLM selector "${selector}" not found for: "${description}"`);
         }
@@ -123,7 +123,7 @@ export class CustomLLMProvider extends BaseAIProvider {
      * Helper method to call your custom LLM API
      * TODO: Implement your actual API call here
      */
-    private async callCustomLLM(prompt: string, task: string): Promise<string> {
+    private async callCustomLLM(prompt: string, _task: string): Promise<string> {
         try {
             const headers: Record<string, string> = {
                 'Content-Type': 'application/json',
@@ -138,9 +138,19 @@ export class CustomLLMProvider extends BaseAIProvider {
                 headers,
                 body: JSON.stringify({
                     model: this.model,
-                    prompt,
-                    task,
-                    // Add any other parameters your LLM requires
+                    messages: [
+                        {
+                            role: 'system',
+                            content: 'You are a Playwright automation expert. Return ONLY a standard CSS selector or an XPath selector prefixed with "xpath=". NEVER output jQuery selectors like :contains() — use :has-text() for CSS or xpath=//tag[contains(text(),"text")] for XPath. Return ONLY the selector string, no explanation.',
+                        },
+                        {
+                            role: 'user',
+                            content: prompt
+                        }
+                    ],
+                    temperature: 0.1,
+                    top_p: 1,
+                    stream: false
                 }),
             });
 
@@ -150,9 +160,8 @@ export class CustomLLMProvider extends BaseAIProvider {
 
             const data: any = await response.json();
 
-            // TODO: Extract the response text from your LLM's response format
-            // This is a placeholder - adjust based on your API response structure
-            return data.response || data.text || data.completion || '';
+            // Extract the response text from OpenAI-compatible response format
+            return data.choices?.[0]?.message?.content || data.response || data.text || '';
 
         } catch (error) {
             console.error('Custom LLM API call failed:', error);
