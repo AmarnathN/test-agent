@@ -1,5 +1,5 @@
-import { Page, BrowserContext } from '@playwright/test';
-import { BrowserAgent as IBrowserAgent, WaitOptions, AITaskType, TestStep } from '../types';
+import { BrowserContext } from '@playwright/test';
+import { BrowserAgent as IBrowserAgent, WaitOptions, AITaskType, TestStep, BrowserController } from '../types';
 import { BaseAIProvider } from '../ai/AIProvider';
 import { Logger } from '../utils/Logger';
 import { SelectorCache, SelectorEntry } from '../cache/SelectorCache';
@@ -8,17 +8,26 @@ import { SelectorCache, SelectorEntry } from '../cache/SelectorCache';
  * AI-powered browser agent for intelligent UI interactions
  */
 export class BrowserAgent implements IBrowserAgent {
-    private page: Page;
+    private controller: BrowserController;
     private aiProvider: BaseAIProvider;
     private logger: Logger;
     private screenshots: string[] = [];
     private selectorCache?: SelectorCache;
     private steps: TestStep[] = [];
 
-    constructor(page: Page, _context: BrowserContext, aiProvider: BaseAIProvider, logger: Logger) {
-        this.page = page;
+    // Note: BrowserContext is kept here temporarily if needed for broad session state, 
+    // but actual interactions are pushed through BrowserController.
+    constructor(controller: BrowserController, _context: BrowserContext, aiProvider: BaseAIProvider, logger: Logger) {
+        this.controller = controller;
         this.aiProvider = aiProvider;
         this.logger = logger;
+    }
+
+    /**
+     * Get the generic browser controller
+     */
+    getController(): BrowserController {
+        return this.controller;
     }
 
     /** Return all recorded steps (called by TestRunner after the test) */
@@ -60,7 +69,7 @@ export class BrowserAgent implements IBrowserAgent {
     async navigate(url: string): Promise<void> {
         this.logger.info(`Navigating to: ${url}`);
         await this.recordStep('navigate', `Navigate to ${url}`, async () => {
-            await this.page.goto(url, { waitUntil: 'load' });
+            await this.controller.navigate(url);
         }, true);
     }
 
@@ -71,8 +80,9 @@ export class BrowserAgent implements IBrowserAgent {
         this.logger.info(`Clicking: ${target}`);
         await this.recordStep('click', `Click "${target}"`, async () => {
             const selector = await this.findElementOptimized(target);
-            await this.page.click(selector);
-            await this.page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => { });
+            await this.controller.click(selector);
+            // Wait a brief moment post-click for dynamic frameworks to settle
+            await this.controller.waitForTimeout(1000);
         }, true);
     }
 
@@ -83,7 +93,7 @@ export class BrowserAgent implements IBrowserAgent {
         this.logger.info(`Filling "${target}" with: ${value}`);
         await this.recordStep('fill', `Fill "${target}" with "${value}"`, async () => {
             const selector = await this.findElementOptimized(target);
-            await this.page.fill(selector, value);
+            await this.controller.fill(selector, value);
         });
     }
 
@@ -94,7 +104,7 @@ export class BrowserAgent implements IBrowserAgent {
         this.logger.info(`Selecting "${value}" in: ${target}`);
         await this.recordStep('select', `Select "${value}" in "${target}"`, async () => {
             const selector = await this.findElementOptimized(target);
-            await this.page.selectOption(selector, value);
+            await this.controller.select(selector, value);
         });
     }
 
@@ -105,7 +115,7 @@ export class BrowserAgent implements IBrowserAgent {
         this.logger.info(`Hovering over: ${target}`);
         await this.recordStep('hover', `Hover over "${target}"`, async () => {
             const selector = await this.findElementOptimized(target);
-            await this.page.hover(selector);
+            await this.controller.hover(selector);
         }, true);
     }
 
@@ -114,7 +124,7 @@ export class BrowserAgent implements IBrowserAgent {
      */
     async press(key: string): Promise<void> {
         this.logger.info(`Pressing key: ${key}`);
-        await this.recordStep('press', `Press key "${key}"`, () => this.page.keyboard.press(key));
+        await this.recordStep('press', `Press key "${key}"`, () => this.controller.press(key));
     }
 
     /**
@@ -122,7 +132,7 @@ export class BrowserAgent implements IBrowserAgent {
      */
     async wait(milliseconds: number): Promise<void> {
         this.logger.info(`Waiting for: ${milliseconds}ms`);
-        await this.recordStep('wait', `Wait ${milliseconds}ms`, () => this.page.waitForTimeout(milliseconds));
+        await this.recordStep('wait', `Wait ${milliseconds}ms`, () => this.controller.waitForTimeout(milliseconds));
     }
 
     /**
@@ -131,8 +141,8 @@ export class BrowserAgent implements IBrowserAgent {
     async waitFor(target: string, options?: WaitOptions): Promise<void> {
         this.logger.info(`Waiting for: ${target}`);
         await this.recordStep('waitFor', `Wait for "${target}"`, async () => {
-            const { selector } = await this.aiProvider.locateElement(this.page, target, AITaskType.ELEMENT_RESOLUTION);
-            await this.page.waitForSelector(selector, {
+            const { selector } = await this.aiProvider.locateElement(this.controller, target, AITaskType.ELEMENT_RESOLUTION);
+            await this.controller.waitForSelector(selector, {
                 timeout: options?.timeout || 30000,
                 state: options?.state || 'visible',
             });
@@ -149,21 +159,30 @@ export class BrowserAgent implements IBrowserAgent {
             return this.expectNavigation(expectation);
         }
 
-        // 2. Check for Visibility
+        // 2. Check for Text Content or Text Visibility
+        const textMatch = expectation.match(/(?:text) ['"](.*?)['"] should (be|have|contain|say) (?:visible|hidden|text)/i) ||
+            expectation.match(/(.*?) should (have|contain|say|be) text ['"](.*?)['"]/i);
+        if (textMatch) {
+            // e.g. "submit button should have text 'Login'" -> [1]: elementDesc, [3]: text
+            // e.g. "text 'Login Success' should be visible" -> [1]: text
+            const isTextFirst = expectation.toLowerCase().startsWith('text');
+            const text = isTextFirst ? textMatch[1] : textMatch[3];
+            const elementDesc = isTextFirst ? undefined : textMatch[1].trim();
+            const isHidden = expectation.toLowerCase().includes('hidden') || expectation.toLowerCase().includes('not');
+
+            if (isHidden) {
+                // If checking for hidden text, wait for it to disappear
+                return this.expectText(text, elementDesc, 10000, true);
+            }
+            return this.expectText(text, elementDesc);
+        }
+
+        // 3. Check for Visibility
         const visibilityMatch = expectation.match(/(.*?) should be (visible|hidden|shown|not shown|appear|disappear)/i);
         if (visibilityMatch) {
             const elementDesc = visibilityMatch[1].trim();
             const isVisible = ['visible', 'shown', 'appear'].includes(visibilityMatch[2].toLowerCase());
             return this.expectVisibility(elementDesc, isVisible);
-        }
-
-        // 3. Check for Text Content
-        const textMatch = expectation.match(/(.*?) should (have|contain|say|be) text ['"](.*?)['"]/i);
-        if (textMatch) {
-            // e.g. "submit button should have text 'Login'"
-            const elementDesc = textMatch[1].trim();
-            const text = textMatch[3];
-            return this.expectText(text, elementDesc);
         }
 
         // 4. Default to Visual/AI Expectation (Expensive)
@@ -179,15 +198,33 @@ export class BrowserAgent implements IBrowserAgent {
             if (urlOrTitle.includes('http') || urlOrTitle.includes('/')) {
                 // Check URL
                 const expectedUrl = urlOrTitle.replace(/should.*to/, '').trim(); // simplistic
-                await this.page.waitForURL(url => url.toString().includes(expectedUrl) || url.pathname.includes(expectedUrl), { timeout: 10000 });
+                await this.controller.waitForTimeout(1000);
+                const currentUrl = this.controller.url();
+                if (!currentUrl.includes(expectedUrl)) {
+                    // Try polling for a bit
+                    let found = false;
+                    for (let i = 0; i < 10; i++) {
+                        await this.controller.waitForTimeout(1000);
+                        if (this.controller.url().includes(expectedUrl)) {
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found) throw new Error(`URL did not include ${expectedUrl}`);
+                }
             } else {
                 // Check Title
                 const expectedTitle = urlOrTitle.replace(/.*?title should be/i, '').replace(/['"]/g, '').trim();
-                await this.page.waitForFunction(
-                    `document.title.includes("${expectedTitle}")`,
-                    undefined,
-                    { timeout: 10000 }
-                );
+                let found = false;
+                for (let i = 0; i < 10; i++) {
+                    const t = await this.controller.title();
+                    if (t.includes(expectedTitle)) {
+                        found = true;
+                        break;
+                    }
+                    await this.controller.waitForTimeout(1000);
+                }
+                if (!found) throw new Error(`Title did not include expected string ${expectedTitle}`);
             }
         } catch (error) {
             // Fallback to AI if simple check fails
@@ -204,9 +241,9 @@ export class BrowserAgent implements IBrowserAgent {
         try {
             const actualSelector = await this.findElementOptimized(selector);
             if (isVisible) {
-                await this.page.waitForSelector(actualSelector, { state: 'visible', timeout: 10000 });
+                await this.controller.waitForSelector(actualSelector, { state: 'visible', timeout: 10000 });
             } else {
-                await this.page.waitForSelector(actualSelector, { state: 'hidden', timeout: 10000 });
+                await this.controller.waitForSelector(actualSelector, { state: 'hidden', timeout: 10000 });
             }
         } catch (error) {
             throw new Error(`Visibility check failed for ${selector}: ${error}`);
@@ -217,29 +254,62 @@ export class BrowserAgent implements IBrowserAgent {
      * Expect text content — polls the live DOM so transient text (toasts,
      * flash messages, alerts) is caught the moment it appears.
      */
-    async expectText(text: string, selector?: string, timeout = 10_000): Promise<void> {
-        this.logger.info(`Expect text: "${text}" in ${selector || 'page'}`);
+    async expectText(text: string, selector?: string, timeout = 10_000, isHiddenCheck = false): Promise<void> {
+        this.logger.info(`Expect text: "${text}" in ${selector || 'page'} to be ${isHiddenCheck ? 'hidden' : 'visible'}`);
         try {
             if (selector && selector !== 'page' && selector !== 'body') {
                 // Scoped check: wait for element then assert its text
                 const actualSelector = await this.findElementOptimized(selector);
-                const element = this.page.locator(actualSelector);
-                await element.waitFor({ timeout });
-                const content = await element.textContent();
+                const locator = this.controller.locator(actualSelector);
+                await locator.waitFor({ timeout });
+                const content = await locator.textContent();
                 if (!content?.includes(text)) {
                     throw new Error(`Text "${text}" not found in element "${selector}" (Found: "${content}")`);
                 }
             } else {
                 // Global page check: poll the live DOM via waitForFunction so
                 // transient text (toasts, flash messages) is caught immediately.
-                await this.page.waitForFunction(
-                    (searchText: string) => document.body?.textContent?.includes(searchText),
-                    text,
-                    { timeout, polling: 100 },   // poll every 100ms
-                );
+                // Manual fallback polling
+                const pollingInterval = 500; // ms
+                const maxLoops = timeout / pollingInterval;
+                let pollingIndex = 0;
+                let found = false;
+                let currentText = '';
+
+                while (pollingIndex < maxLoops) {
+                    currentText = await this.controller.evaluate(() => document.body?.innerText || '');
+                    const textPresent = currentText.includes(text);
+
+                    if (isHiddenCheck) {
+                        if (!textPresent) {
+                            found = true; // Text is hidden (not present)
+                            break;
+                        }
+                    } else {
+                        if (textPresent) {
+                            found = true; // Text is visible (present)
+                            break;
+                        }
+                    }
+
+                    await this.controller.waitForTimeout(pollingInterval);
+                    pollingIndex++;
+                }
+
+                if (!found) {
+                    if (isHiddenCheck) {
+                        throw new Error(`Text "${text}" never disappeared after ${timeout}ms`);
+                    }
+                    throw new Error(
+                        `Text "${text}" was not ${isHiddenCheck ? 'hidden' : 'visible'} after ${timeout}ms.\n` +
+                        `Page content seen text: "${currentText.substring(0, 200)}..."`
+                    );
+                }
             }
         } catch (error) {
-            throw new Error(`Text check failed: ${error}`);
+            this.logger.warn(`Text check failed statically, falling back to AI visual validation: ${error}`);
+            // Let AI handle complex text assertions (like canvas, images, ShadowDOM, strict layouts)
+            await this.expectVisual(`expect ${selector || 'the page'} to ${isHiddenCheck ? 'NOT contain' : 'contain'} the text "${text}"`);
         }
     }
 
@@ -254,7 +324,7 @@ export class BrowserAgent implements IBrowserAgent {
 
         // Use AI to validate the expectation
         const isValid = await this.aiProvider.validateExpectation(
-            this.page,
+            this.controller,
             expectation,
             screenshot,
             AITaskType.EXPECTATION_VALIDATION
@@ -275,12 +345,7 @@ export class BrowserAgent implements IBrowserAgent {
         return await this.takeScreenshot(filename);
     }
 
-    /**
-     * Get the underlying Playwright page object
-     */
-    getPage(): Page {
-        return this.page;
-    }
+
 
     /**
      * Get all screenshots taken during test
@@ -301,7 +366,7 @@ export class BrowserAgent implements IBrowserAgent {
      */
     private async findElementOptimized(description: string): Promise<string> {
         // Construct localized intent key
-        const domain = new URL(this.page.url()).hostname;
+        const domain = new URL(this.controller.url()).hostname;
         const intent = `${domain}:${description.trim().toLowerCase()}`;
 
         // 1. Try cached selectors
@@ -324,9 +389,9 @@ export class BrowserAgent implements IBrowserAgent {
 
                 for (const s of sortedSelectors) {
                     try {
-                        const el = this.page.locator(s.selector).first();
+                        const locator = this.controller.locator(s.selector).first();
                         // Short timeout for cached checks to stay fast
-                        await el.waitFor({ timeout: 2000, state: 'visible' });
+                        await locator.waitFor({ timeout: 2000, state: 'visible' });
 
                         this.logger.debug(`Cache hit: "${description}" -> ${s.selector}`);
 
@@ -403,7 +468,7 @@ export class BrowserAgent implements IBrowserAgent {
         // 3. AI Resolution (Expensive)
         this.logger.debug(`Using AI to locate: ${description}`);
         const { selector: aiSelector, model: aiModel } = await this.aiProvider.locateElement(
-            this.page,
+            this.controller,
             description,
             AITaskType.ELEMENT_RESOLUTION
         );
@@ -411,8 +476,8 @@ export class BrowserAgent implements IBrowserAgent {
         // Verify AI Selector before caching
         try {
             // Immediate validation
-            const el = this.page.locator(aiSelector).first();
-            await el.waitFor({ timeout: 3000, state: 'visible' });
+            const locator = this.controller.locator(aiSelector).first();
+            await locator.waitFor({ timeout: 3000, state: 'visible' });
 
             // Use AI Selector & Cache it
             if (this.selectorCache) {
@@ -454,8 +519,8 @@ export class BrowserAgent implements IBrowserAgent {
      * Internal method to take and store screenshot
      */
     private async takeScreenshot(_name: string): Promise<string> {
-        const screenshot = await this.page.screenshot({ type: 'png' });
-        const base64 = screenshot.toString('base64');
+        const screenshotBuf = await this.controller.takeScreenshot();
+        const base64 = screenshotBuf.toString('base64');
         this.screenshots.push(base64);
         return base64;
     }
@@ -476,11 +541,10 @@ export class BrowserAgent implements IBrowserAgent {
 
         for (const pattern of patterns) {
             try {
-                const element = await this.page.$(pattern);
-                if (element) {
-                    this.logger.info(`Found element using fallback selector: ${pattern}`);
-                    return pattern;
-                }
+                // If locator works, it means it was found
+                await this.controller.waitForSelector(pattern, { timeout: 1000 });
+                this.logger.info(`Found element using fallback selector: ${pattern}`);
+                return pattern;
             } catch (e) {
                 // Continue to next pattern
             }

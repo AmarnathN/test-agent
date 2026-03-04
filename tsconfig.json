@@ -27,7 +27,7 @@
         "noFallthroughCasesInSwitch": true,
         "baseUrl": ".",
         "paths": {
-            "@ai-test/framework": [
+            "web-agentic-ai": [
                 "src/index.ts"
             ]
         }

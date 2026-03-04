@@ -1,4 +1,4 @@
-import { test } from '../src/dsl/TestCollector';
+import { test } from '../../src/dsl/TestCollector';
 
 /**
  * Example: Complete e-commerce checkout flow

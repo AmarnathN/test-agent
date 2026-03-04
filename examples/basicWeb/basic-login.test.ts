@@ -1,4 +1,4 @@
-import { test } from '../src/dsl/TestCollector';
+import { test } from '../../src/fixtures';
 
 /**
  * Example: Basic login flow test
@@ -18,9 +18,7 @@ test('User can login successfully', async ({ agent }) => {
     await agent.expect('user should be redirected to dashboard');
     await agent.expect('welcome message should be visible');
     await agent.expect('user profile icon should appear in header');
-}, {
-    tags: ['auth', 'smoke'],
-    timeout: 30000,
+    await agent.expect('user profile icon should appear in header');
 });
 
 /**
@@ -36,8 +34,7 @@ test('Login fails with invalid credentials', async ({ agent }) => {
     // Expect error message
     await agent.expect('error message should be displayed');
     await agent.expect('user should remain on login page');
-}, {
-    tags: ['auth', 'negative'],
+    await agent.expect('user should remain on login page');
 });
 
 /**
@@ -54,6 +51,5 @@ test('User can logout', async ({ agent }) => {
     // Validate logout
     await agent.expect('user should be redirected to login page');
     await agent.expect('login form should be visible');
-}, {
-    tags: ['auth'],
+    await agent.expect('login form should be visible');
 });

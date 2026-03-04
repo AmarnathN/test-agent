@@ -1,6 +1,5 @@
-import { Page } from '@playwright/test';
 import { BaseAIProvider } from './AIProvider';
-import { FailureAnalysis } from '../types';
+import { BrowserController, FailureAnalysis } from '../types';
 
 /**
  * Template for custom LLM provider implementation
@@ -22,12 +21,9 @@ export class CustomLLMProvider extends BaseAIProvider {
      * Locate element using custom LLM
      * TODO: Implement your custom LLM API call here
      */
-    async locateElement(page: Page, description: string, _taskType?: any): Promise<{ selector: string, model: string }> {
-        // Unused context for template
-        // const _context = await this.getPageContext(page);
-
+    async locateElement(controller: BrowserController, description: string, _taskType?: any): Promise<{ selector: string, model: string }> {
         // Get all interactive elements
-        const elements = await page.evaluate(() => {
+        const elements = await controller.evaluate(() => {
             const interactiveElements = document.querySelectorAll(
                 'button, a, input, select, textarea, [role="button"], [onclick]'
             );
@@ -44,12 +40,12 @@ export class CustomLLMProvider extends BaseAIProvider {
         });
 
         // TODO: Replace with your custom LLM API call
-        const prompt = `Identify CSS selector for: "${description}"\nElements: ${JSON.stringify(elements)}`;
+        const prompt = `Identify CSS selector for: "${description}"\nElements: ${JSON.stringify(elements)} `;
         const selector = await this.callCustomLLM(prompt, 'element-location');
 
         // Validate selector
         try {
-            await page.waitForSelector(selector, { timeout: 2000 });
+            await controller.waitForSelector(selector, { timeout: 2000 });
             return { selector, model: this.model };
         } catch (error) {
             throw new Error(`Custom LLM selector "${selector}" not found for: "${description}"`);
@@ -61,16 +57,16 @@ export class CustomLLMProvider extends BaseAIProvider {
      * TODO: Implement your custom LLM API call here
      */
     async validateExpectation(
-        page: Page,
+        controller: BrowserController,
         expectation: string,
         _screenshot?: string,
         _taskType?: any
     ): Promise<boolean> {
-        const context = await this.getPageContext(page);
+        const context = await this.getPageContext(controller);
 
         // TODO: Replace with your custom LLM API call
         // If your LLM supports vision, include the screenshot
-        const prompt = `Page: ${context.url}\nText: ${context.visibleText}\nExpectation: ${expectation}\nIs this met?`;
+        const prompt = `Page: ${context.url} \nText: ${context.visibleText} \nExpectation: ${expectation} \nIs this met ? `;
         const result = await this.callCustomLLM(prompt, 'expectation-validation');
 
         return result.toLowerCase().includes('true') || result.toLowerCase().includes('yes');
@@ -87,7 +83,7 @@ export class CustomLLMProvider extends BaseAIProvider {
         _pageContent?: string,
         _taskType?: any
     ): Promise<FailureAnalysis> {
-        const prompt = `Test: ${testName}\nError: ${error.message}\nStack: ${error.stack}\nAnalyze this failure.`;
+        const prompt = `Test: ${testName} \nError: ${error.message} \nStack: ${error.stack} \nAnalyze this failure.`;
 
         // TODO: Replace with your custom LLM API call
         const analysis = await this.callCustomLLM(prompt, 'failure-analysis');
@@ -130,7 +126,7 @@ export class CustomLLMProvider extends BaseAIProvider {
             };
 
             if (this.apiKey) {
-                headers['Authorization'] = `Bearer ${this.apiKey}`;
+                headers['Authorization'] = `Bearer ${this.apiKey} `;
             }
 
             const response = await fetch(this.endpoint, {
@@ -155,7 +151,7 @@ export class CustomLLMProvider extends BaseAIProvider {
             });
 
             if (!response.ok) {
-                throw new Error(`Custom LLM API error: ${response.statusText}`);
+                throw new Error(`Custom LLM API error: ${response.statusText} `);
             }
 
             const data: any = await response.json();
@@ -165,7 +161,7 @@ export class CustomLLMProvider extends BaseAIProvider {
 
         } catch (error) {
             console.error('Custom LLM API call failed:', error);
-            throw new Error(`Failed to call custom LLM: ${error}`);
+            throw new Error(`Failed to call custom LLM: ${error} `);
         }
     }
 }

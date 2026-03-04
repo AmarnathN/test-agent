@@ -1,5 +1,4 @@
-import { Page } from '@playwright/test';
-import { AIProvider, FailureAnalysis } from '../types';
+import { AIProvider, FailureAnalysis, BrowserController } from '../types';
 
 /**
  * Abstract base class for AI providers
@@ -12,18 +11,18 @@ export abstract class BaseAIProvider implements AIProvider {
         this.config = config;
     }
 
-    abstract locateElement(page: Page, description: string, taskType?: any): Promise<{ selector: string, model: string }>;
+    abstract locateElement(controller: BrowserController, description: string, taskType?: any): Promise<{ selector: string, model: string }>;
 
     /**
      * Validate expectation against page state
-     * @param page - Playwright page object
+     * @param controller - Generic browser controller
      * @param expectation - Natural language expectation
      * @param screenshot - Optional base64 encoded screenshot
      * @param taskType - Optional task type for routing
      * @returns true if expectation is met, false otherwise
      */
     abstract validateExpectation(
-        page: Page,
+        controller: BrowserController,
         expectation: string,
         screenshot?: string,
         taskType?: any
@@ -66,17 +65,35 @@ export abstract class BaseAIProvider implements AIProvider {
     /**
      * Helper method to extract page context for AI analysis
      */
-    protected async getPageContext(page: Page): Promise<{
+    protected async getPageContext(controller: BrowserController): Promise<{
         url: string;
         title: string;
         html: string;
         visibleText: string;
     }> {
-        const url = page.url();
-        const title = await page.title();
-        const html = await page.content();
-        const visibleText = await page.evaluate(() => {
-            return document.body.innerText;
+        const url = controller.url();
+        const title = await controller.title();
+        const html = await controller.content();
+        const visibleText = await controller.evaluate(() => {
+            // Function to recursively extract visible text
+            function getVisibleText(el: HTMLElement): string {
+                if (!el) return '';
+                if (el.tagName === 'SCRIPT' || el.tagName === 'STYLE' || el.tagName === 'NOSCRIPT') return '';
+
+                const style = window.getComputedStyle(el);
+                if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return '';
+
+                let text = '';
+                for (const child of Array.from(el.childNodes)) {
+                    if (child.nodeType === Node.TEXT_NODE) {
+                        text += child.textContent + ' ';
+                    } else if (child.nodeType === Node.ELEMENT_NODE) {
+                        text += getVisibleText(child as HTMLElement) + ' ';
+                    }
+                }
+                return text;
+            }
+            return getVisibleText(document.body).replace(/\s+/g, ' ').trim();
         });
 
         return { url, title, html, visibleText };
@@ -85,8 +102,8 @@ export abstract class BaseAIProvider implements AIProvider {
     /**
      * Helper method to take screenshot as base64
      */
-    protected async takeScreenshot(page: Page): Promise<string> {
-        const screenshot = await page.screenshot({ type: 'png' });
-        return screenshot.toString('base64');
+    protected async takeScreenshot(controller: BrowserController): Promise<string> {
+        const screenshotBuf = await controller.takeScreenshot();
+        return screenshotBuf.toString('base64');
     }
 }

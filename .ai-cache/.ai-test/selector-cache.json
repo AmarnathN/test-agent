@@ -1,14 +1,16 @@
 {
+  "version": 1,
+  "updatedAt": 1772627449723,
   "entries": {
     "ap-frontend-mu.vercel.app:email input": {
       "intent": "ap-frontend-mu.vercel.app:email input",
       "selectors": [
         {
-          "selector": "input[type=\"email\"]",
-          "confidence": 0.86,
-          "successCount": 1,
+          "selector": "#email",
+          "confidence": 0.92,
+          "successCount": 7,
           "failureCount": 0,
-          "lastVerified": 1772611118930,
+          "lastVerified": 1772626906100,
           "source": "ai",
           "selectorType": "css",
           "aiProvider": "customllm",
@@ -21,10 +23,10 @@
       "selectors": [
         {
           "selector": "#password",
-          "confidence": 0.86,
-          "successCount": 1,
+          "confidence": 0.92,
+          "successCount": 7,
           "failureCount": 0,
-          "lastVerified": 1772611119446,
+          "lastVerified": 1772626906133,
           "source": "ai",
           "selectorType": "css",
           "aiProvider": "customllm",
@@ -37,10 +39,10 @@
       "selectors": [
         {
           "selector": "button:has-text(\"Sign in\")",
-          "confidence": 0.86,
-          "successCount": 1,
+          "confidence": 0.92,
+          "successCount": 7,
           "failureCount": 0,
-          "lastVerified": 1772611119962,
+          "lastVerified": 1772626906177,
           "source": "ai",
           "selectorType": "css",
           "aiProvider": "customllm",
@@ -53,10 +55,26 @@
       "selectors": [
         {
           "selector": ":has-text(\"Login Failed\")",
+          "confidence": 0.86,
+          "successCount": 1,
+          "failureCount": 0,
+          "lastVerified": 1772626319029,
+          "source": "ai",
+          "selectorType": "css",
+          "aiProvider": "customllm",
+          "model": "openai/gpt-oss-120b"
+        }
+      ]
+    },
+    "example.com:more information link": {
+      "intent": "example.com:more information link",
+      "selectors": [
+        {
+          "selector": "a:has-text(\"Learn more\")",
           "confidence": 0.85,
           "successCount": 0,
           "failureCount": 0,
-          "lastVerified": 1772611130841,
+          "lastVerified": 1772627449723,
           "source": "ai",
           "selectorType": "css",
           "aiProvider": "customllm",
@@ -64,6 +82,5 @@
         }
       ]
     }
-  },
-  "updatedAt": 1772611130841
+  }
 }

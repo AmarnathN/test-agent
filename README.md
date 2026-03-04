@@ -41,7 +41,7 @@ An AI-powered UI test automation framework for CI/CD pipelines that uses natural
 ## Installation
 
 ```bash
-npm install @ai-test/framework
+npm install web-agentic-ai
 ```
 
 ## Quick Start
@@ -54,8 +54,8 @@ npx ai-test init
 
 This creates:
 - `ai-test.config.js` - Framework configuration
-- `tests/` - Test directory
-- `tests/example.test.ts` - Example test file
+- `examples/` - Example test directory
+- `examples/example.test.ts` - Example test file
 - `.env.example` - Environment variables template
 
 ### 2. Configure API Key
@@ -68,10 +68,10 @@ OPENAI_API_KEY=your-api-key-here
 
 ### 3. Write Your First Test
 
-Create `tests/login.test.ts`:
+Create `examples/login.test.ts`:
 
 ```typescript
-import { test } from '@ai-test/framework';
+import { test } from 'web-agentic-ai';
 
 test('User can login', async ({ agent }) => {
   await agent.navigate('https://your-app.com/login');
@@ -138,7 +138,7 @@ module.exports = {
 ### Basic Test Structure
 
 ```typescript
-import { test } from '@ai-test/framework';
+import { test } from 'web-agentic-ai';
 
 test('Test name', async ({ agent }) => {
   // Your test code
@@ -274,7 +274,7 @@ Edit `src/ai/CustomLLMProvider.ts` and implement the API calls for your LLM.
 ```bash
 # Run tests
 npx ai-test run [pattern]
-npx ai-test run "tests/**/*.test.ts"
+npx ai-test run "examples/**/*.test.ts"
 npx ai-test run --headless --browser firefox
 
 # Initialize project

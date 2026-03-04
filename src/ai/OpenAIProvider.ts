@@ -1,7 +1,6 @@
-import { Page } from '@playwright/test';
 import OpenAI from 'openai';
 import { BaseAIProvider } from './AIProvider';
-import { FailureAnalysis, AITaskType, ModelTier, FrameworkConfig } from '../types';
+import { BrowserController, FailureAnalysis, AITaskType, ModelTier, FrameworkConfig } from '../types';
 import { CostTracker } from '../utils/CostTracker';
 
 /**
@@ -83,12 +82,12 @@ export class OpenAIProvider extends BaseAIProvider {
     /**
      * Locate element using AI-powered natural language understanding
      */
-    async locateElement(page: Page, description: string, taskType: AITaskType = AITaskType.ELEMENT_RESOLUTION): Promise<{ selector: string, model: string }> {
-        const model = this.resolveModel(taskType);
-        const context = await this.getPageContext(page);
+    async locateElement(controller: BrowserController, description: string, taskType?: AITaskType): Promise<{ selector: string, model: string }> {
+        const model = this.resolveModel(taskType || AITaskType.ELEMENT_RESOLUTION);
+        const context = await this.getPageContext(controller);
 
         // 1. Interactive elements (buttons, inputs, links, etc.)
-        const interactiveElements = await page.evaluate(() => {
+        const interactiveElements = await controller.evaluate(() => {
             const els = document.querySelectorAll(
                 'button, a, input, select, textarea, [role="button"], [onclick], [tabindex]'
             );
@@ -113,7 +112,7 @@ export class OpenAIProvider extends BaseAIProvider {
         });
 
         // 2. Display/text elements: toasts, alerts, modals, error banners, etc.
-        const displayElements = await page.evaluate(() => {
+        const displayElements = await controller.evaluate(() => {
             const DISPLAY_SELECTORS = [
                 '[role="alert"]',
                 '[role="status"]',
@@ -163,66 +162,66 @@ export class OpenAIProvider extends BaseAIProvider {
         const quotedInDescription = description.match(/["'""]([^"'""]{2,})["'""]/)?.[1] ?? null;
 
         const textConstraintBlock = quotedInDescription
-            ? `\n⛔ MANDATORY for THIS request: the description explicitly names the text "${quotedInDescription}".\n   Your selector MUST include :has-text("${quotedInDescription}").\n   Example: [role="alert"]:has-text("${quotedInDescription}")\n   A selector without this text is INCORRECT and will be rejected.\n`
+            ? `\n⛔ MANDATORY for THIS request: the description explicitly names the text "${quotedInDescription}".\n   Your selector MUST include: has - text("${quotedInDescription}").\n   Example: [role = "alert"]: has - text("${quotedInDescription}") \n   A selector without this text is INCORRECT and will be rejected.\n`
             : '';
 
         const textConstraintFooter = quotedInDescription
-            ? `\nFINAL REMINDER: your selector MUST include :has-text("${quotedInDescription}"). Do NOT return [role="alert"] or any selector that omits this text.`
+            ? `\nFINAL REMINDER: your selector MUST include: has - text("${quotedInDescription}").Do NOT return [role = "alert"] or any selector that omits this text.`
             : '';
 
-        const prompt = `You are an expert at writing STABLE, NON-FLAKY selectors for Playwright automated testing.
-${textConstraintBlock}
+        const prompt = `You are an expert at writing STABLE, NON - FLAKY selectors for Playwright automated testing.
+    ${textConstraintBlock}
 Your task: return exactly ONE selector that uniquely identifies the element described as: "${description}"
 
-ALLOWED SELECTOR STRATEGIES (in priority order):
+ALLOWED SELECTOR STRATEGIES(in priority order):
 
---- FOR INTERACTIVE ELEMENTS (buttons, inputs, links) ---
-1. CSS: [data-testid="..."] or [data-cy="..."]
+--- FOR INTERACTIVE ELEMENTS(buttons, inputs, links)-- -
+    1. CSS: [data - testid="..."] or[data - cy= "..."]
 2. CSS: #id
-3. CSS: input[type="email"], input[type="password"], button[type="submit"]
-4. CSS: [name="fieldname"]
-5. CSS: [aria-label="..."]
-6. CSS: [placeholder="..."]
+3. CSS: input[type = "email"], input[type = "password"], button[type = "submit"]
+4. CSS: [name = "fieldname"]
+5. CSS: [aria - label="..."]
+6. CSS: [placeholder = "..."]
 
---- FOR DISPLAY ELEMENTS (toasts, alerts, errors, modals, banners) ---
-1. CSS: [data-testid="..."] or [data-cy="..."]
-2. CSS: [role="alert"], [role="status"], [role="dialog"]
-3. CSS: [aria-live="polite"] or [aria-live="assertive"]
-4. CSS + Playwright extension: :has-text("exact text")  — e.g. li:has-text("Login failed")
-5. XPath: xpath=//TYPE[contains(text(),'TEXT')]  — e.g. xpath=//div[contains(text(),'Login Failed')]
-6. CSS: [class*="semantic-class-name"]  (partial class — only semantic names, not Tailwind utilities)
+--- FOR DISPLAY ELEMENTS(toasts, alerts, errors, modals, banners)-- -
+    1. CSS: [data - testid="..."] or[data - cy= "..."]
+2. CSS: [role = "alert"], [role = "status"], [role = "dialog"]
+3. CSS: [aria - live="polite"] or[aria - live= "assertive"]
+4. CSS + Playwright extension: : has - text("exact text")  — e.g.li: has - text("Login failed")
+5. XPath: xpath =//TYPE[contains(text(),'TEXT')]  — e.g. xpath=//div[contains(text(),'Login Failed')]
+    6. CSS: [class*= "semantic-class-name"](partial class — only semantic names, not Tailwind utilities)
 
 ⚠️  CRITICAL TEXT RULE:
 If the description mentions specific text in quotes, you MUST embed that text in the selector.
-NEVER return a bare [role="alert"] — it matches any alert, not the specific one.
+NEVER return a bare[role = "alert"] — it matches any alert, not the specific one.
 
-FORBIDDEN — NEVER OUTPUT THESE:
-- jQuery selectors: :contains(), :eq(), :first, :last
-- Playwright text engine: text="..." (use :has-text() or XPath)
-- Positional: li:nth-of-type(n), div:nth-child(n)
-- Long Tailwind class chains: button.w-full.mt-6.bg-blue-500
-- Generic structural selectors when specific text was named in the description
+    FORBIDDEN — NEVER OUTPUT THESE:
+- jQuery selectors: : contains(), : eq(), : first, : last
+    - Playwright text engine: text = "..."(use : has - text() or XPath)
+        - Positional: li: nth - of - type(n), div: nth - child(n)
+            - Long Tailwind class chains: button.w - full.mt - 6.bg - blue - 500
+                - Generic structural selectors when specific text was named in the description
 
 EXAMPLES:
-  ✓ input[type="email"]
-  ✓ button[type="submit"]
-  ✓ [role="alert"]:has-text("Login Success")
-  ✓ [role="alert"]:has-text("Login Failed")
-  ✓ [data-testid="error-toast"]
-  ✓ li:has-text("Invalid credentials")
-  ✓ xpath=//div[@role="alert"][contains(text(),'Login Failed')]
-  ✗ li:contains("Login failed")
-  ✗ [role="alert"]   ← wrong when description specifies text
+  ✓ input[type = "email"]
+  ✓ button[type = "submit"]
+  ✓[role = "alert"]: has - text("Login Success")
+  ✓[role = "alert"]: has - text("Login Failed")
+  ✓[data - testid="error-toast"]
+  ✓ li: has - text("Invalid credentials")
+  ✓ xpath =//div[@role="alert"][contains(text(),'Login Failed')]
+  ✗ li: contains("Login failed")
+  ✗[role = "alert"]   ← wrong when description specifies text
 
 Page URL: ${context.url}
 
---- INTERACTIVE ELEMENTS ---
-${JSON.stringify(interactiveElements, null, 2)}
+--- INTERACTIVE ELEMENTS-- -
+    ${JSON.stringify(interactiveElements, null, 2)}
 
---- DISPLAY / TEXT ELEMENTS (toasts, alerts, modals, error messages) ---
-${JSON.stringify(displayElements, null, 2)}
+--- DISPLAY / TEXT ELEMENTS(toasts, alerts, modals, error messages)-- -
+    ${JSON.stringify(displayElements, null, 2)}
 ${textConstraintFooter}
-Respond with ONLY the selector string. No markdown, no explanation, no backticks.`;
+Respond with ONLY the selector string.No markdown, no explanation, no backticks.`;
 
 
 
@@ -249,7 +248,7 @@ Respond with ONLY the selector string. No markdown, no explanation, no backticks
 
         let rawSelector = response.choices[0]?.message?.content?.trim() || '';
         // Strip accidental markdown code fences
-        rawSelector = rawSelector.replace(/^`+|`+$/g, '').trim();
+        rawSelector = rawSelector.replace(/^`+| `+$/g, '').trim();
         // Strip label prefixes the AI sometimes copies from prompt examples
         // e.g. "CSS: input[type='email']" → "input[type='email']"
         //      "XPath: //div[...]"        → "xpath=//div[...]"
@@ -268,7 +267,7 @@ Respond with ONLY the selector string. No markdown, no explanation, no backticks
         const quotedTextMatch = description.match(/["']([^"']{2,})["']/);
         if (quotedTextMatch) {
             const txt = quotedTextMatch[1].replace(/'/g, "\\'"); // escape for XPath
-            candidates.push(`xpath=//*[contains(text(),'${txt}')]`);
+            candidates.push(`xpath =//*[contains(text(),'${txt}')]`);
             candidates.push(`:has-text("${txt.replace(/"/g, '')}")`);
         }
 
@@ -279,7 +278,7 @@ Respond with ONLY the selector string. No markdown, no explanation, no backticks
 
         for (const candidate of candidates) {
             try {
-                await page.waitForSelector(candidate, { timeout: 2000 });
+                await controller.waitForSelector(candidate, { timeout: 2000 });
                 return { selector: candidate, model }; // ← first one that works wins
             } catch {
                 // try next candidate
@@ -296,15 +295,15 @@ Respond with ONLY the selector string. No markdown, no explanation, no backticks
      * Validate expectation using AI analysis
      */
     async validateExpectation(
-        page: Page,
+        controller: BrowserController,
         expectation: string,
         screenshot?: string,
-        taskType: AITaskType = AITaskType.EXPECTATION_VALIDATION
+        taskType?: AITaskType
     ): Promise<boolean> {
-        const model = this.resolveModel(taskType);
-        const context = await this.getPageContext(page);
+        const model = this.resolveModel(taskType || AITaskType.EXPECTATION_VALIDATION);
+        const context = await this.getPageContext(controller);
         const isVisionModel = /gpt-4o|vision|gemini|claude-3/i.test(model);
-        const screenshotData = screenshot || (isVisionModel ? await this.takeScreenshot(page) : undefined);
+        const screenshotData = screenshot || (isVisionModel ? await this.takeScreenshot(controller) : undefined);
 
         const textContent: any = {
             type: 'text',

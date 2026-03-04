@@ -1,4 +1,4 @@
-import { test } from '../src/dsl/TestCollector';
+import { test } from '../../src/dsl/TestCollector';
 
 /**
  * Example: Visual regression test for homepage

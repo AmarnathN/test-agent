@@ -3,7 +3,7 @@
  *
  * Usage in test files:
  *   import { test, expect } from '../src/fixtures';
- *   // or (if path alias is set up) from '@ai-test/framework/fixtures'
+ *   // or (if path alias is set up) from 'web-agentic-ai/fixtures'
  *
  *   test('my test', async ({ agent }) => {
  *     await agent.navigate('https://example.com');
@@ -12,6 +12,7 @@
 
 import { test as base, expect } from '@playwright/test';
 import { BrowserAgent } from './agent/BrowserAgent';
+import { PlaywrightController } from './agent/PlaywrightController';
 import { OpenAIProvider } from './ai/OpenAIProvider';
 import { CustomLLMProvider } from './ai/CustomLLMProvider';
 import { ConfigLoader } from './config/ConfigLoader';
@@ -46,7 +47,8 @@ export const test = base.extend<AITestFixtures>({
         const selectorCache = new SelectorCache(cacheDir, false);
 
         const logger = new Logger(testInfo.title);
-        const agent = new BrowserAgent(page, context, aiProvider, logger);
+        const controller = new PlaywrightController(page);
+        const agent = new BrowserAgent(controller, context, aiProvider, logger);
         agent.setSelectorCache(selectorCache);
 
         // Hand the agent to the test; cleanup happens automatically because

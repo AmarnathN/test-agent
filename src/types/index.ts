@@ -59,7 +59,28 @@ export interface BrowserAgent {
     expectVisibility(selector: string, isVisible?: boolean): Promise<void>;
     expectVisual(description: string): Promise<void>;
     screenshot(name?: string): Promise<string>;
-    getPage(): Page;
+    getController(): BrowserController;
+}
+
+/**
+ * Generic browser controller interface for abstracting automation backends
+ * (Playwright, Puppeteer, WebdriverIO, etc.)
+ */
+export interface BrowserController {
+    navigate(url: string): Promise<void>;
+    click(selector: string): Promise<void>;
+    fill(selector: string, value: string): Promise<void>;
+    select(selector: string, value: string): Promise<void>;
+    hover(selector: string): Promise<void>;
+    press(key: string): Promise<void>;
+    waitForSelector(selector: string, options?: WaitOptions): Promise<void>;
+    waitForTimeout(milliseconds: number): Promise<void>;
+    evaluate<T>(script: (arg: any) => T, arg?: any): Promise<T>;
+    takeScreenshot(options?: { fullPage?: boolean }): Promise<Buffer>;
+    content(): Promise<string>;
+    url(): string;
+    title(): Promise<string>;
+    locator(selector: string): any; // Generic locator object
 }
 
 /**
@@ -227,12 +248,12 @@ export interface AIProvider {
     /**
      * Locate element using natural language description
      */
-    locateElement(page: Page, description: string, taskType?: AITaskType): Promise<{ selector: string, model: string }>;
+    locateElement(controller: BrowserController, description: string, taskType?: AITaskType): Promise<{ selector: string, model: string }>;
 
     /**
      * Validate expectation against page state
      */
-    validateExpectation(page: Page, expectation: string, screenshot?: string, taskType?: AITaskType): Promise<boolean>;
+    validateExpectation(controller: BrowserController, expectation: string, screenshot?: string, taskType?: AITaskType): Promise<boolean>;
 
     /**
      * Analyze test failure

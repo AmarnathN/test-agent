@@ -1,13 +1,10 @@
 import { defineConfig, devices } from '@playwright/test';
 import * as dotenv from 'dotenv';
 
-// Load .env so OPENAI_API_KEY etc. are available in the fixture
 dotenv.config();
 
 export default defineConfig({
-    testDir: './tests',
-    // Also pick up example tests
-    // testDir: './examples',
+    testDir: './examples',
 
     /* Timeout per test */
     timeout: 60_000,

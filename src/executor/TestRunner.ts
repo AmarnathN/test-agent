@@ -1,4 +1,5 @@
 import { chromium, firefox, webkit, Browser } from '@playwright/test';
+import { PlaywrightController } from '../agent/PlaywrightController';
 import { TestCase, TestResult, TestSuiteResult, FrameworkConfig, TestContext } from '../types';
 import { BrowserAgent } from '../agent/BrowserAgent';
 import { OpenAIProvider } from '../ai/OpenAIProvider';
@@ -128,7 +129,8 @@ export class TestRunner {
             const page = await context.newPage();
 
             // Create browser agent
-            agent = new BrowserAgent(page, context, this.aiProvider, testLogger);
+            const browserController = new PlaywrightController(page);
+            agent = new BrowserAgent(browserController, context, this.aiProvider, testLogger);
 
             // Enable selector learning (NEW - reduces LLM calls!)
             agent.setSelectorCache(this.selectorCache);
@@ -238,7 +240,7 @@ export class TestRunner {
             const absolutePath = path.resolve(filePath);
 
             // Register ts-node + tsconfig-paths once so we can require() .ts test
-            // files directly (with @ai-test/framework path alias resolved).
+            // files directly (with web-agentic-ai path alias resolved).
             const isTs = absolutePath.endsWith('.ts');
             if (isTs) {
                 const tsConfigPath = path.resolve(process.cwd(), 'tsconfig.json');
@@ -253,7 +255,7 @@ export class TestRunner {
                     });
                 }
 
-                // Register tsconfig-paths so Node resolves @ai-test/framework → src/index.ts
+                // Register tsconfig-paths so Node resolves web-agentic-ai → src/index.ts
                 const tsconfigPaths = require('tsconfig-paths');
                 if (!TestRunner._pathsRegistered) {
                     tsconfigPaths.register({

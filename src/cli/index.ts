@@ -20,7 +20,7 @@ program
 program
     .command('run')
     .description('Run test files')
-    .argument('[pattern]', 'Test file pattern', '**/*.test.ts')
+    .argument('[pattern]', 'Test file pattern')
     .option('-c, --config <path>', 'Path to config file')
     .option('-h, --headless', 'Run in headless mode')
     .option('-b, --browser <browser>', 'Browser to use (chromium, firefox, webkit)')
@@ -32,7 +32,8 @@ program
             console.log(chalk.gray('Delegating to Playwright Test runner...\n'));
 
             // Build playwright CLI args
-            const args: string[] = ['playwright', 'test', pattern];
+            const args: string[] = ['playwright', 'test'];
+            if (pattern) args.push(pattern);
 
             if (options.headless) {
                 // Playwright reads PWHEADLESS env var
@@ -75,8 +76,8 @@ program
     .action(() => {
         console.log(chalk.blue('🤖 Initializing AI Test project...\n'));
 
-        // Create directory structure
-        const dirs = ['tests', 'ai-test-results'];
+        // Create default directories
+        const dirs = ['examples', 'ai-test-results'];
         dirs.forEach(dir => {
             if (!fs.existsSync(dir)) {
                 fs.mkdirSync(dir, { recursive: true });
@@ -128,7 +129,7 @@ program
         }
 
         // Create example test file
-        const exampleTest = `import { test } from '@ai-test/framework';
+        const exampleTest = `import { test } from 'web-agentic-ai';
 
 test('Example Login Test', async ({ agent }) => {
   // Navigate to login page
@@ -159,9 +160,9 @@ test('Example Search Test', async ({ agent }) => {
 });
 `;
 
-        if (!fs.existsSync('tests/example.test.ts')) {
-            fs.writeFileSync('tests/example.test.ts', exampleTest);
-            console.log(chalk.green('✓ Created tests/example.test.ts'));
+        if (!fs.existsSync('examples/example.test.ts')) {
+            fs.writeFileSync('examples/example.test.ts', exampleTest);
+            console.log(chalk.green('✓ Created examples/example.test.ts'));
         }
 
         // Create .env.example
@@ -187,7 +188,7 @@ AI_TEST_TIMEOUT=60000
         console.log(chalk.blue('\n✨ Project initialized successfully!'));
         console.log(chalk.gray('\nNext steps:'));
         console.log(chalk.gray('  1. Copy .env.example to .env and add your API keys'));
-        console.log(chalk.gray('  2. Run: npm install @ai-test/framework'));
+        console.log(chalk.gray('  2. Run: npm install web-agentic-ai'));
         console.log(chalk.gray('  3. Run your tests: npx ai-test run'));
     });
 

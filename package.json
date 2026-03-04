@@ -1,9 +1,24 @@
 {
-  "name": "@ai-test/framework",
+  "name": "web-agentic-ai",
   "version": "1.0.0",
   "description": "AI-powered UI test automation framework for CI/CD pipelines",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "require": "./dist/index.js",
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./fixtures": {
+      "require": "./dist/fixtures.js",
+      "import": "./dist/fixtures.js",
+      "types": "./dist/fixtures.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
   "bin": {
     "ai-test": "./dist/cli/index.js"
   },
@@ -27,7 +42,6 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@playwright/test": "^1.40.1",
     "chalk": "^4.1.2",
     "commander": "^11.1.0",
     "dotenv": "^17.3.1",
@@ -36,7 +50,11 @@
     "tsconfig-paths": "^4.2.0",
     "winston": "^3.11.0"
   },
+  "peerDependencies": {
+    "@playwright/test": ">=1.40.1"
+  },
   "devDependencies": {
+    "@playwright/test": "^1.40.1",
     "@types/node": "^20.10.5",
     "@typescript-eslint/eslint-plugin": "^6.15.0",
     "@typescript-eslint/parser": "^6.15.0",
