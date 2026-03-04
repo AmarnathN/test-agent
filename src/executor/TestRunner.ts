@@ -116,6 +116,7 @@ export class TestRunner {
         const startTime = Date.now();
         const screenshots: string[] = [];
         let videoPath: string | undefined;
+        let agent: BrowserAgent | undefined;
 
         try {
             // Create new browser context for test isolation
@@ -127,7 +128,7 @@ export class TestRunner {
             const page = await context.newPage();
 
             // Create browser agent
-            const agent = new BrowserAgent(page, context, this.aiProvider, testLogger);
+            agent = new BrowserAgent(page, context, this.aiProvider, testLogger);
 
             // Enable selector learning (NEW - reduces LLM calls!)
             agent.setSelectorCache(this.selectorCache);
@@ -166,6 +167,7 @@ export class TestRunner {
                 status: 'passed',
                 duration,
                 screenshots,
+                steps: agent.getSteps(),
                 videoPath,
                 tags: test.tags,
             };
@@ -194,6 +196,7 @@ export class TestRunner {
                 duration,
                 error: error as Error,
                 screenshots,
+                steps: agent?.getSteps() ?? [],
                 videoPath,
                 failureAnalysis,
                 tags: test.tags,
@@ -206,16 +209,21 @@ export class TestRunner {
      */
     private async initBrowser(): Promise<void> {
         const browserType = this.config.browser || 'chromium';
+        const launchOptions = {
+            headless: this.config.headless,
+            slowMo: this.config.slowMo,
+            devtools: this.config.devtools,
+        };
 
         switch (browserType) {
             case 'chromium':
-                this.browser = await chromium.launch({ headless: this.config.headless });
+                this.browser = await chromium.launch(launchOptions);
                 break;
             case 'firefox':
-                this.browser = await firefox.launch({ headless: this.config.headless });
+                this.browser = await firefox.launch(launchOptions);
                 break;
             case 'webkit':
-                this.browser = await webkit.launch({ headless: this.config.headless });
+                this.browser = await webkit.launch(launchOptions);
                 break;
         }
 
@@ -229,6 +237,33 @@ export class TestRunner {
         try {
             const absolutePath = path.resolve(filePath);
 
+            // Register ts-node + tsconfig-paths once so we can require() .ts test
+            // files directly (with @ai-test/framework path alias resolved).
+            const isTs = absolutePath.endsWith('.ts');
+            if (isTs) {
+                const tsConfigPath = path.resolve(process.cwd(), 'tsconfig.json');
+                const { paths, baseUrl } = require(tsConfigPath).compilerOptions ?? {};
+
+                // Register ts-node if not already active
+                if (!(process as unknown as Record<symbol, unknown>)[Symbol.for('ts-node.register.instance')]) {
+                    require('ts-node').register({
+                        project: tsConfigPath,
+                        transpileOnly: true,   // skip type-checking for speed
+                        compilerOptions: { paths, baseUrl },
+                    });
+                }
+
+                // Register tsconfig-paths so Node resolves @ai-test/framework → src/index.ts
+                const tsconfigPaths = require('tsconfig-paths');
+                if (!TestRunner._pathsRegistered) {
+                    tsconfigPaths.register({
+                        baseUrl: path.resolve(process.cwd(), baseUrl ?? '.'),
+                        paths: paths ?? {},
+                    });
+                    TestRunner._pathsRegistered = true;
+                }
+            }
+
             // Clear require cache to allow reloading
             delete require.cache[absolutePath];
 
@@ -241,6 +276,8 @@ export class TestRunner {
             throw error;
         }
     }
+
+    private static _pathsRegistered = false;
 
     /**
      * Cleanup resources

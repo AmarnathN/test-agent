@@ -1,0 +1,89 @@
+{
+  "entries": {
+    "ap-frontend-mu.vercel.app:email input": {
+      "intent": "ap-frontend-mu.vercel.app:email input",
+      "selectors": [
+        {
+          "selector": "input[type=\"email\"]",
+          "confidence": 0.88,
+          "successCount": 3,
+          "failureCount": 0,
+          "lastVerified": 1772608309624,
+          "source": "ai",
+          "selectorType": "css"
+        }
+      ]
+    },
+    "ap-frontend-mu.vercel.app:password field": {
+      "intent": "ap-frontend-mu.vercel.app:password field",
+      "selectors": [
+        {
+          "selector": "input[name=\"password\"]",
+          "confidence": 0.88,
+          "successCount": 3,
+          "failureCount": 0,
+          "lastVerified": 1772608310137,
+          "source": "ai",
+          "selectorType": "css"
+        }
+      ]
+    },
+    "ap-frontend-mu.vercel.app:sign in button": {
+      "intent": "ap-frontend-mu.vercel.app:sign in button",
+      "selectors": [
+        {
+          "selector": "button:text(\"Sign in\")",
+          "confidence": 0.88,
+          "successCount": 3,
+          "failureCount": 0,
+          "lastVerified": 1772608310651,
+          "source": "ai",
+          "selectorType": "css"
+        }
+      ]
+    },
+    "ap-frontend-mu.vercel.app:alert with text \"login success\"": {
+      "intent": "ap-frontend-mu.vercel.app:alert with text \"login success\"",
+      "selectors": [
+        {
+          "selector": "[role=\"alert\"]",
+          "confidence": 0.85,
+          "successCount": 0,
+          "failureCount": 0,
+          "lastVerified": 1772608228728,
+          "source": "ai",
+          "selectorType": "css"
+        }
+      ]
+    },
+    "ap-frontend-mu.vercel.app:alert with text \"login failed\"": {
+      "intent": "ap-frontend-mu.vercel.app:alert with text \"login failed\"",
+      "selectors": [
+        {
+          "selector": "[role=\"alert\"]:has-text(\"Login Failed\")",
+          "confidence": 0.86,
+          "successCount": 1,
+          "failureCount": 0,
+          "lastVerified": 1772608312396,
+          "source": "ai",
+          "selectorType": "css"
+        }
+      ]
+    },
+    "ap-frontend-mu.vercel.app:toast with text \"login success\"": {
+      "intent": "ap-frontend-mu.vercel.app:toast with text \"login success\"",
+      "selectors": [
+        {
+          "selector": "[role=\"alert\"]",
+          "confidence": 0.85,
+          "successCount": 0,
+          "failureCount": 0,
+          "lastVerified": 1772608307058,
+          "source": "ai",
+          "selectorType": "css"
+        }
+      ]
+    }
+  },
+  "updatedAt": 1772608312396
+}

@@ -27,7 +27,24 @@ class TestRegistry {
     }
 }
 
-export const testRegistry = new TestRegistry();
+// Key under which the singleton lives in the global namespace
+const REGISTRY_KEY = Symbol.for('__ai_test_registry__');
+
+declare global {
+    // eslint-disable-next-line no-var
+    var __ai_test_registry__: TestRegistry | undefined;
+}
+
+// Re-use any already-created instance (e.g. from a different module resolution
+// path such as src/ vs dist/) to avoid the "tests registered into one instance,
+// runner reads from another" split-singleton problem.
+export const testRegistry: TestRegistry =
+    (global as unknown as Record<symbol, TestRegistry>)[REGISTRY_KEY] ??
+    (() => {
+        const instance = new TestRegistry();
+        (global as unknown as Record<symbol, TestRegistry>)[REGISTRY_KEY] = instance;
+        return instance;
+    })();
 
 /**
  * DSL function to define a test

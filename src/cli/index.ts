@@ -1,13 +1,10 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander';
-import { TestRunner } from '../executor/TestRunner';
 import { ConfigLoader } from '../config/ConfigLoader';
-import { HTMLReporter } from '../reporter/HTMLReporter';
-import { JUnitReporter } from '../reporter/JUnitReporter';
-import { glob } from 'glob';
 import * as path from 'path';
 import * as fs from 'fs';
+import { spawnSync } from 'child_process';
 import chalk from 'chalk';
 
 const program = new Command();
@@ -32,60 +29,36 @@ program
     .action(async (pattern: string, options: any) => {
         try {
             console.log(chalk.blue('🤖 AI Test Framework\n'));
+            console.log(chalk.gray('Delegating to Playwright Test runner...\n'));
 
-            // Load configuration
-            const config = ConfigLoader.load(options.config);
+            // Build playwright CLI args
+            const args: string[] = ['playwright', 'test', pattern];
 
-            // Override with CLI options
-            if (options.headless) config.headless = true;
-            if (options.browser) config.browser = options.browser;
-            if (options.timeout) config.timeout = parseInt(options.timeout);
+            if (options.headless) {
+                // Playwright reads PWHEADLESS env var
+                process.env['PWHEADLESS'] = 'true';
+            }
+            if (options.browser) args.push('--project', options.browser);
+            if (options.timeout) args.push('--timeout', options.timeout);
+            if (options.config) args.push('--config', options.config);
 
-            // Find test files
-            const testFiles = await glob(pattern, {
+            const result = spawnSync('npx', args, {
+                stdio: 'inherit',
                 cwd: process.cwd(),
-                absolute: true,
-                ignore: ['**/node_modules/**', '**/dist/**'],
+                env: { ...process.env },
             });
 
-            if (testFiles.length === 0) {
-                console.log(chalk.yellow(`No test files found matching pattern: ${pattern}`));
-                process.exit(0);
-            }
+            if (result.error) throw result.error;
 
-            console.log(chalk.gray(`Found ${testFiles.length} test file(s)\n`));
-
-            // Create test runner
-            const runner = new TestRunner(config);
-
-            // Run tests
-            const results = await runner.runTests(testFiles);
-
-            // Generate reports
-            const reporters = [];
-
-            if (config.reporters?.includes('html')) {
-                const htmlReporter = new HTMLReporter(config.outputDir);
-                await htmlReporter.onSuiteEnd(results);
-                reporters.push('HTML');
-            }
-
-            if (config.reporters?.includes('junit')) {
-                const junitReporter = new JUnitReporter(config.outputDir);
-                await junitReporter.onSuiteEnd(results);
-                reporters.push('JUnit');
-            }
-
-            console.log(chalk.gray(`\nReports generated: ${reporters.join(', ')}`));
-
-            // Exit with appropriate code
-            if (results.failed > 0) {
-                console.log(chalk.red('\n✗ Tests failed'));
-                process.exit(1);
-            } else {
+            if (result.status === 0) {
                 console.log(chalk.green('\n✓ All tests passed'));
-                process.exit(0);
+                console.log(chalk.gray('  View report: npx playwright show-report'));
+            } else {
+                console.log(chalk.red('\n✗ Tests failed'));
+                console.log(chalk.gray('  View report: npx playwright show-report'));
             }
+
+            process.exit(result.status ?? 1);
 
         } catch (error) {
             console.error(chalk.red('Error running tests:'), error);

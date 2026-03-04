@@ -1,4 +1,4 @@
-import { TestSuiteResult, Reporter, TestCase, TestResult } from '../types';
+import { TestSuiteResult, Reporter, TestCase, TestResult, TestStep } from '../types';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -32,6 +32,7 @@ export class HTMLReporter implements Reporter {
     await this.saveScreenshots(suiteResult);
 
     console.log(`\n📊 HTML Report generated: ${reportPath}`);
+    console.log(`   Open with: open ${reportPath}`);
   }
 
   private generateHTML(suiteResult: TestSuiteResult): string {
@@ -101,66 +102,91 @@ export class HTMLReporter implements Reporter {
 
     return `
     <div class="test-card ${statusClass}">
-      <div class="test-header">
+      <div class="test-header" onclick="toggleSteps(this)">
         <span class="status-icon">${statusIcon}</span>
         <span class="test-name">${result.name}</span>
         <span class="test-duration">${result.duration}ms</span>
+        <span class="toggle-icon">▼</span>
       </div>
       
       ${result.tags ? `<div class="test-tags">${result.tags.map(tag => `<span class="tag">${tag}</span>`).join('')}</div>` : ''}
       
-      ${result.error ? `
-        <div class="error-section">
-          <div class="error-title">Error:</div>
-          <pre class="error-message">${this.escapeHtml(result.error.message)}</pre>
-          ${result.error.stack ? `
-            <details>
-              <summary>Stack Trace</summary>
-              <pre class="stack-trace">${this.escapeHtml(result.error.stack)}</pre>
-            </details>
-          ` : ''}
-        </div>
-      ` : ''}
-      
-      ${result.failureAnalysis ? `
-        <div class="ai-analysis">
-          <div class="analysis-title">🤖 AI Failure Analysis</div>
-          <div class="analysis-content">
-            <div class="analysis-row">
-              <strong>Category:</strong> 
-              <span class="category-badge">${result.failureAnalysis.category}</span>
-            </div>
-            <div class="analysis-row">
-              <strong>Root Cause:</strong> ${result.failureAnalysis.rootCause}
-            </div>
-            <div class="analysis-row">
-              <strong>Suggested Fix:</strong> ${result.failureAnalysis.suggestedFix}
-            </div>
-            <div class="analysis-row">
-              <strong>Confidence:</strong> 
-              <div class="confidence-bar">
-                <div class="confidence-fill" style="width: ${result.failureAnalysis.confidence * 100}%"></div>
+      <div class="test-body">
+        ${this.generateStepsHTML(result.steps)}
+
+        ${result.error ? `
+          <div class="error-section">
+            <div class="error-title">Error:</div>
+            <pre class="error-message">${this.escapeHtml(result.error.message)}</pre>
+            ${result.error.stack ? `
+              <details>
+                <summary>Stack Trace</summary>
+                <pre class="stack-trace">${this.escapeHtml(result.error.stack)}</pre>
+              </details>
+            ` : ''}
+          </div>
+        ` : ''}
+        
+        ${result.failureAnalysis ? `
+          <div class="ai-analysis">
+            <div class="analysis-title">🤖 AI Failure Analysis</div>
+            <div class="analysis-content">
+              <div class="analysis-row">
+                <strong>Category:</strong> 
+                <span class="category-badge">${result.failureAnalysis.category}</span>
               </div>
-              ${(result.failureAnalysis.confidence * 100).toFixed(0)}%
+              <div class="analysis-row">
+                <strong>Root Cause:</strong> ${result.failureAnalysis.rootCause}
+              </div>
+              <div class="analysis-row">
+                <strong>Suggested Fix:</strong> ${result.failureAnalysis.suggestedFix}
+              </div>
+              <div class="analysis-row">
+                <strong>Confidence:</strong> 
+                <div class="confidence-bar">
+                  <div class="confidence-fill" style="width: ${result.failureAnalysis.confidence * 100}%"></div>
+                </div>
+                ${(result.failureAnalysis.confidence * 100).toFixed(0)}%
+              </div>
             </div>
           </div>
-        </div>
-      ` : ''}
-      
-      ${result.screenshots.length > 0 ? `
-        <div class="screenshots">
-          <div class="screenshots-title">Screenshots (${result.screenshots.length})</div>
-          <div class="screenshot-grid">
-            ${result.screenshots.map((screenshot, index) => `
-              <img src="data:image/png;base64,${screenshot}" 
-                   alt="Screenshot ${index + 1}" 
-                   class="screenshot-thumb"
-                   onclick="openModal(this.src)">
-            `).join('')}
+        ` : ''}
+        
+        ${result.screenshots.length > 0 ? `
+          <div class="screenshots">
+            <div class="screenshots-title">Screenshots (${result.screenshots.length})</div>
+            <div class="screenshot-grid">
+              ${result.screenshots.map((screenshot, index) => `
+                <img src="data:image/png;base64,${screenshot}" 
+                     alt="Screenshot ${index + 1}" 
+                     class="screenshot-thumb"
+                     onclick="openModal(this.src)">
+              `).join('')}
+            </div>
           </div>
-        </div>
-      ` : ''}
+        ` : ''}
+      </div>
     </div>`;
+  }
+
+  private generateStepsHTML(steps: TestStep[]): string {
+    if (!steps || steps.length === 0) return '';
+    const rows = steps.map((step, i) => {
+      const icon = step.status === 'passed' ? '✓' : step.status === 'failed' ? '✗' : '⟳';
+      const cls = step.status;
+      const dur = step.duration != null ? `${step.duration}ms` : '';
+      return `
+        <div class="step step-${cls}">
+          <span class="step-num">${i + 1}</span>
+          <span class="step-icon ${cls}">${icon}</span>
+          <span class="step-action">${step.action}</span>
+          <span class="step-desc">${this.escapeHtml(step.description)}</span>
+          <span class="step-dur">${dur}</span>
+          ${step.error ? `<div class="step-error">${this.escapeHtml(step.error)}</div>` : ''}
+          ${step.screenshot ? `<img class="step-screenshot" src="data:image/png;base64,${step.screenshot}" onclick="openModal(this.src)" title="Step ${i + 1} screenshot">` : ''}
+        </div>`;
+    }).join('');
+    return `<div class="steps-section"><div class="steps-title">Steps (${steps.length})</div><div class="steps-list">${rows}</div></div>`;
   }
 
   private getStyles(): string {
@@ -458,6 +484,30 @@ export class HTMLReporter implements Reporter {
         font-weight: bold;
         cursor: pointer;
       }
+
+      /* ---- Step timeline ---- */
+      .test-header { cursor: pointer; user-select: none; }
+      .toggle-icon { margin-left: auto; color: #718096; font-size: 0.8rem; transition: transform 0.2s; }
+      .test-header.collapsed .toggle-icon { transform: rotate(-90deg); }
+      .test-body { margin-top: 12px; }
+      .test-body.hidden { display: none; }
+
+      .steps-section { margin-bottom: 14px; }
+      .steps-title { font-weight: 600; color: #2d3748; margin-bottom: 8px; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.5px; }
+      .steps-list { display: flex; flex-direction: column; gap: 4px; }
+      .step { display: flex; align-items: flex-start; gap: 8px; padding: 6px 10px; border-radius: 6px; font-size: 0.87rem; background: #f7fafc; border-left: 3px solid #cbd5e0; flex-wrap: wrap; }
+      .step.step-passed { border-left-color: #48bb78; }
+      .step.step-failed { border-left-color: #f56565; background: #fff5f5; }
+      .step-num { color: #a0aec0; min-width: 20px; font-weight: 600; }
+      .step-icon { font-weight: bold; min-width: 16px; }
+      .step-icon.passed { color: #48bb78; }
+      .step-icon.failed { color: #f56565; }
+      .step-action { background: #edf2f7; color: #4a5568; padding: 1px 7px; border-radius: 10px; font-size: 0.78rem; font-weight: 600; white-space: nowrap; }
+      .step-desc { flex: 1; color: #2d3748; }
+      .step-dur { color: #a0aec0; font-size: 0.8rem; white-space: nowrap; }
+      .step-error { width: 100%; margin-top: 4px; margin-left: 52px; color: #c53030; font-family: monospace; font-size: 0.82rem; white-space: pre-wrap; word-break: break-word; }
+      .step-screenshot { width: 80px; height: auto; border-radius: 4px; cursor: pointer; border: 1px solid #e2e8f0; transition: transform 0.15s; }
+      .step-screenshot:hover { transform: scale(1.08); }
     `;
   }
 
@@ -475,6 +525,12 @@ export class HTMLReporter implements Reporter {
           if (e.target === modal) modal.remove();
         };
         document.body.appendChild(modal);
+      }
+
+      function toggleSteps(header) {
+        header.classList.toggle('collapsed');
+        const body = header.parentElement.querySelector('.test-body');
+        if (body) body.classList.toggle('hidden');
       }
     `;
   }

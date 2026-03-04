@@ -3,7 +3,7 @@ import { test } from '../src/dsl/TestCollector';
 /**
  * Example: Visual regression test for homepage
  */
-test('Homepage visual regression', async ({ agent, page }) => {
+test('Homepage visual regression', async ({ agent }) => {
     // Navigate to homepage
     await agent.navigate('https://example.com');
 
@@ -11,7 +11,7 @@ test('Homepage visual regression', async ({ agent, page }) => {
     await agent.wait(2000);
 
     // Take screenshot for comparison
-    const screenshot = await agent.screenshot('homepage');
+    await agent.screenshot('homepage');
 
     // AI-powered visual validation
     await agent.expect('homepage layout should match design');
@@ -65,7 +65,7 @@ test('Dark mode visual test', async ({ agent }) => {
 /**
  * Example: Compare before and after UI change
  */
-test('Button hover state visual test', async ({ agent, page }) => {
+test('Button hover state visual test', async ({ agent }) => {
     await agent.navigate('https://example.com');
 
     // Screenshot before hover

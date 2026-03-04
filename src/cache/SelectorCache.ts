@@ -92,6 +92,9 @@ export class SelectorCache {
         this.readOnly = readOnly;
         this.fileData = this.file.load();
 
+        // Normalise the loaded data in case the file is missing the entries field
+        this.fileData.entries = this.fileData.entries ?? {};
+
         // hydrate memory cache
         Object.values(this.fileData.entries).forEach(e =>
             this.memory.set(e)

@@ -71,6 +71,19 @@ export interface WaitOptions {
 }
 
 /**
+ * A single recorded step inside a test
+ */
+export interface TestStep {
+    action: string;          // e.g. 'navigate', 'click', 'fill', 'expect'
+    description: string;     // human-readable description of what was done
+    status: 'passed' | 'failed' | 'running';
+    startTime: number;       // Date.now() timestamp
+    duration?: number;       // ms
+    screenshot?: string;     // base64 PNG taken after this step
+    error?: string;
+}
+
+/**
  * Test result
  */
 export interface TestResult {
@@ -79,6 +92,7 @@ export interface TestResult {
     duration: number;
     error?: Error;
     screenshots: string[];
+    steps: TestStep[];       // ordered list of every agent action
     videoPath?: string;
     failureAnalysis?: FailureAnalysis;
     tags?: string[];
@@ -115,6 +129,8 @@ export interface FrameworkConfig {
     // Browser settings
     browser?: 'chromium' | 'firefox' | 'webkit';
     headless?: boolean;
+    slowMo?: number;  // ms delay between each action — useful for debugging
+    devtools?: boolean; // open Chrome DevTools automatically
     viewport?: { width: number; height: number };
 
     // Test execution

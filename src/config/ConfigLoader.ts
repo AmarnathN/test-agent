@@ -1,6 +1,7 @@
 import { FrameworkConfig } from '../types';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as dotenv from 'dotenv';
 
 /**
  * Configuration loader for the framework
@@ -38,6 +39,9 @@ export class ConfigLoader {
      * Load configuration from file or environment
      */
     static load(configPath?: string): FrameworkConfig {
+        // Load .env file into process.env before reading any env vars
+        dotenv.config();
+
         let config = { ...this.DEFAULT_CONFIG };
 
         // Load from config file if exists

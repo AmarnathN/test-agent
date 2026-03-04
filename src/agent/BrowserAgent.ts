@@ -1,5 +1,5 @@
 import { Page, BrowserContext } from '@playwright/test';
-import { BrowserAgent as IBrowserAgent, WaitOptions, AITaskType } from '../types';
+import { BrowserAgent as IBrowserAgent, WaitOptions, AITaskType, TestStep } from '../types';
 import { BaseAIProvider } from '../ai/AIProvider';
 import { Logger } from '../utils/Logger';
 import { SelectorCache, SelectorEntry } from '../cache/SelectorCache';
@@ -13,6 +13,7 @@ export class BrowserAgent implements IBrowserAgent {
     private logger: Logger;
     private screenshots: string[] = [];
     private selectorCache?: SelectorCache;
+    private steps: TestStep[] = [];
 
     constructor(page: Page, _context: BrowserContext, aiProvider: BaseAIProvider, logger: Logger) {
         this.page = page;
@@ -20,12 +21,47 @@ export class BrowserAgent implements IBrowserAgent {
         this.logger = logger;
     }
 
+    /** Return all recorded steps (called by TestRunner after the test) */
+    getSteps(): TestStep[] {
+        return this.steps;
+    }
+
+    /**
+     * Wrap a step: records timing, status, and an optional screenshot on failure.
+     */
+    private async recordStep<T>(
+        action: string,
+        description: string,
+        fn: () => Promise<T>,
+        captureScreenshot = false,
+    ): Promise<T> {
+        const step: TestStep = { action, description, status: 'running', startTime: Date.now() };
+        this.steps.push(step);
+        try {
+            const result = await fn();
+            step.status = 'passed';
+            step.duration = Date.now() - step.startTime;
+            if (captureScreenshot) {
+                step.screenshot = await this.takeScreenshot(`step-${this.steps.length}`);
+            }
+            return result;
+        } catch (err) {
+            step.status = 'failed';
+            step.duration = Date.now() - step.startTime;
+            step.error = String(err);
+            try { step.screenshot = await this.takeScreenshot(`step-${this.steps.length}-fail`); } catch { /* ignore */ }
+            throw err;
+        }
+    }
+
     /**
      * Navigate to a URL
      */
     async navigate(url: string): Promise<void> {
         this.logger.info(`Navigating to: ${url}`);
-        await this.page.goto(url, { waitUntil: 'networkidle' });
+        await this.recordStep('navigate', `Navigate to ${url}`, async () => {
+            await this.page.goto(url, { waitUntil: 'load' });
+        }, true);
     }
 
     /**
@@ -33,17 +69,11 @@ export class BrowserAgent implements IBrowserAgent {
      */
     async click(target: string): Promise<void> {
         this.logger.info(`Clicking: ${target}`);
-
-        try {
-            // Try learned selectors first (includes AI fallback)
+        await this.recordStep('click', `Click "${target}"`, async () => {
             const selector = await this.findElementOptimized(target);
             await this.page.click(selector);
-
-            // Wait for potential navigation or network activity
             await this.page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => { });
-        } catch (error) {
-            throw new Error(`Failed to click element: ${target}. ${error}`);
-        }
+        }, true);
     }
 
     /**
@@ -51,13 +81,10 @@ export class BrowserAgent implements IBrowserAgent {
      */
     async fill(target: string, value: string): Promise<void> {
         this.logger.info(`Filling "${target}" with: ${value}`);
-
-        try {
+        await this.recordStep('fill', `Fill "${target}" with "${value}"`, async () => {
             const selector = await this.findElementOptimized(target);
             await this.page.fill(selector, value);
-        } catch (error) {
-            throw new Error(`Failed to fill element: ${target}. ${error}`);
-        }
+        });
     }
 
     /**
@@ -65,13 +92,10 @@ export class BrowserAgent implements IBrowserAgent {
      */
     async select(target: string, value: string): Promise<void> {
         this.logger.info(`Selecting "${value}" in: ${target}`);
-
-        try {
+        await this.recordStep('select', `Select "${value}" in "${target}"`, async () => {
             const selector = await this.findElementOptimized(target);
             await this.page.selectOption(selector, value);
-        } catch (error) {
-            throw new Error(`Failed to select option in: ${target}. ${error}`);
-        }
+        });
     }
 
     /**
@@ -79,13 +103,10 @@ export class BrowserAgent implements IBrowserAgent {
      */
     async hover(target: string): Promise<void> {
         this.logger.info(`Hovering over: ${target}`);
-
-        try {
+        await this.recordStep('hover', `Hover over "${target}"`, async () => {
             const selector = await this.findElementOptimized(target);
             await this.page.hover(selector);
-        } catch (error) {
-            throw new Error(`Failed to hover over: ${target}. ${error}`);
-        }
+        }, true);
     }
 
     /**
@@ -93,7 +114,7 @@ export class BrowserAgent implements IBrowserAgent {
      */
     async press(key: string): Promise<void> {
         this.logger.info(`Pressing key: ${key}`);
-        await this.page.keyboard.press(key);
+        await this.recordStep('press', `Press key "${key}"`, () => this.page.keyboard.press(key));
     }
 
     /**
@@ -101,7 +122,7 @@ export class BrowserAgent implements IBrowserAgent {
      */
     async wait(milliseconds: number): Promise<void> {
         this.logger.info(`Waiting for: ${milliseconds}ms`);
-        await this.page.waitForTimeout(milliseconds);
+        await this.recordStep('wait', `Wait ${milliseconds}ms`, () => this.page.waitForTimeout(milliseconds));
     }
 
     /**
@@ -109,20 +130,13 @@ export class BrowserAgent implements IBrowserAgent {
      */
     async waitFor(target: string, options?: WaitOptions): Promise<void> {
         this.logger.info(`Waiting for: ${target}`);
-
-        try {
-            const selector = await this.aiProvider.locateElement(
-                this.page,
-                target,
-                AITaskType.ELEMENT_RESOLUTION
-            );
+        await this.recordStep('waitFor', `Wait for "${target}"`, async () => {
+            const selector = await this.aiProvider.locateElement(this.page, target, AITaskType.ELEMENT_RESOLUTION);
             await this.page.waitForSelector(selector, {
                 timeout: options?.timeout || 30000,
                 state: options?.state || 'visible',
             });
-        } catch (error) {
-            throw new Error(`Timeout waiting for: ${target}. ${error}`);
-        }
+        });
     }
 
     /**
@@ -200,27 +214,29 @@ export class BrowserAgent implements IBrowserAgent {
     }
 
     /**
-     * Expect text content
+     * Expect text content — polls the live DOM so transient text (toasts,
+     * flash messages, alerts) is caught the moment it appears.
      */
-    async expectText(text: string, selector?: string): Promise<void> {
+    async expectText(text: string, selector?: string, timeout = 10_000): Promise<void> {
         this.logger.info(`Expect text: "${text}" in ${selector || 'page'}`);
         try {
             if (selector && selector !== 'page' && selector !== 'body') {
+                // Scoped check: wait for element then assert its text
                 const actualSelector = await this.findElementOptimized(selector);
                 const element = this.page.locator(actualSelector);
-                await element.waitFor();
+                await element.waitFor({ timeout });
                 const content = await element.textContent();
                 if (!content?.includes(text)) {
                     throw new Error(`Text "${text}" not found in element "${selector}" (Found: "${content}")`);
                 }
             } else {
-                // Global page text check using locator instead of document
-                const body = this.page.locator('body');
-                await body.waitFor();
-                const content = await body.textContent();
-                if (!content?.includes(text)) {
-                    throw new Error(`Text "${text}" not found on page`);
-                }
+                // Global page check: poll the live DOM via waitForFunction so
+                // transient text (toasts, flash messages) is caught immediately.
+                await this.page.waitForFunction(
+                    (searchText: string) => document.body?.textContent?.includes(searchText),
+                    text,
+                    { timeout, polling: 100 },   // poll every 100ms
+                );
             }
         } catch (error) {
             throw new Error(`Text check failed: ${error}`);

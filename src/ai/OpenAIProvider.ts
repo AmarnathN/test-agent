@@ -87,52 +87,151 @@ export class OpenAIProvider extends BaseAIProvider {
         const model = this.resolveModel(taskType);
         const context = await this.getPageContext(page);
 
-        // Get all interactive elements with their attributes
-        const elements = await page.evaluate(() => {
-            const interactiveElements = document.querySelectorAll(
+        // 1. Interactive elements (buttons, inputs, links, etc.)
+        const interactiveElements = await page.evaluate(() => {
+            const els = document.querySelectorAll(
                 'button, a, input, select, textarea, [role="button"], [onclick], [tabindex]'
             );
-
-            return Array.from(interactiveElements).map((el, index) => {
+            return Array.from(els).map((el, index) => {
                 const rect = el.getBoundingClientRect();
                 return {
                     index,
+                    kind: 'interactive',
                     tag: el.tagName.toLowerCase(),
-                    id: el.id,
-                    class: el.className,
-                    text: el.textContent?.trim().substring(0, 100),
-                    type: (el as HTMLInputElement).type,
-                    placeholder: (el as HTMLInputElement).placeholder,
-                    ariaLabel: el.getAttribute('aria-label'),
-                    name: (el as HTMLInputElement).name,
+                    id: el.id || undefined,
+                    name: (el as HTMLInputElement).name || undefined,
+                    type: (el as HTMLInputElement).type || undefined,
+                    placeholder: (el as HTMLInputElement).placeholder || undefined,
+                    ariaLabel: el.getAttribute('aria-label') || undefined,
+                    role: el.getAttribute('role') || undefined,
+                    text: el.textContent?.trim().substring(0, 80) || undefined,
+                    dataCy: el.getAttribute('data-cy') || undefined,
+                    dataTestId: el.getAttribute('data-testid') || undefined,
                     visible: rect.width > 0 && rect.height > 0,
                 };
             }).filter(el => el.visible);
         });
 
-        const prompt = `Given the following page context and interactive elements, identify the best CSS selector for the element described as: "${description}"
+        // 2. Display/text elements: toasts, alerts, modals, error banners, etc.
+        const displayElements = await page.evaluate(() => {
+            const DISPLAY_SELECTORS = [
+                '[role="alert"]',
+                '[role="status"]',
+                '[role="dialog"]',
+                '[role="tooltip"]',
+                '[role="log"]',
+                '[aria-live]',
+                '.toast, .Toastify__toast, [class*="toast"]',
+                '.alert, [class*="alert"]',
+                '.error, [class*="error"]',
+                '.modal, [class*="modal"]',
+                '.notification, [class*="notification"]',
+                '.banner, [class*="banner"]',
+                'p, span, h1, h2, h3, h4, li',   // text nodes — filtered by content below
+            ].join(', ');
+
+            const seen = new Set<Element>();
+            return Array.from(document.querySelectorAll(DISPLAY_SELECTORS))
+                .filter(el => {
+                    if (seen.has(el)) return false;
+                    seen.add(el);
+                    const rect = el.getBoundingClientRect();
+                    const text = el.textContent?.trim() ?? '';
+                    // Only include elements with meaningful short text content
+                    return rect.width > 0 && rect.height > 0 && text.length > 2 && text.length < 300;
+                })
+                .map((el, index) => {
+                    const rect = el.getBoundingClientRect();
+                    return {
+                        index,
+                        kind: 'display',
+                        tag: el.tagName.toLowerCase(),
+                        id: el.id || undefined,
+                        role: el.getAttribute('role') || undefined,
+                        ariaLabel: el.getAttribute('aria-label') || undefined,
+                        ariaLive: el.getAttribute('aria-live') || undefined,
+                        dataTestId: el.getAttribute('data-testid') || undefined,
+                        dataCy: el.getAttribute('data-cy') || undefined,
+                        className: el.className || undefined,
+                        text: el.textContent?.trim().substring(0, 150),
+                        visible: rect.width > 0 && rect.height > 0,
+                    };
+                });
+        });
+
+        // Extract any quoted text from the description to build a dynamic per-request constraint
+        const quotedInDescription = description.match(/["'""]([^"'""]{2,})["'""]/)?.[1] ?? null;
+
+        const textConstraintBlock = quotedInDescription
+            ? `\n⛔ MANDATORY for THIS request: the description explicitly names the text "${quotedInDescription}".\n   Your selector MUST include :has-text("${quotedInDescription}").\n   Example: [role="alert"]:has-text("${quotedInDescription}")\n   A selector without this text is INCORRECT and will be rejected.\n`
+            : '';
+
+        const textConstraintFooter = quotedInDescription
+            ? `\nFINAL REMINDER: your selector MUST include :has-text("${quotedInDescription}"). Do NOT return [role="alert"] or any selector that omits this text.`
+            : '';
+
+        const prompt = `You are an expert at writing STABLE, NON-FLAKY selectors for Playwright automated testing.
+${textConstraintBlock}
+Your task: return exactly ONE selector that uniquely identifies the element described as: "${description}"
+
+ALLOWED SELECTOR STRATEGIES (in priority order):
+
+--- FOR INTERACTIVE ELEMENTS (buttons, inputs, links) ---
+1. CSS: [data-testid="..."] or [data-cy="..."]
+2. CSS: #id
+3. CSS: input[type="email"], input[type="password"], button[type="submit"]
+4. CSS: [name="fieldname"]
+5. CSS: [aria-label="..."]
+6. CSS: [placeholder="..."]
+
+--- FOR DISPLAY ELEMENTS (toasts, alerts, errors, modals, banners) ---
+1. CSS: [data-testid="..."] or [data-cy="..."]
+2. CSS: [role="alert"], [role="status"], [role="dialog"]
+3. CSS: [aria-live="polite"] or [aria-live="assertive"]
+4. CSS + Playwright extension: :has-text("exact text")  — e.g. li:has-text("Login failed")
+5. XPath: xpath=//TYPE[contains(text(),'TEXT')]  — e.g. xpath=//div[contains(text(),'Login Failed')]
+6. CSS: [class*="semantic-class-name"]  (partial class — only semantic names, not Tailwind utilities)
+
+⚠️  CRITICAL TEXT RULE:
+If the description mentions specific text in quotes, you MUST embed that text in the selector.
+NEVER return a bare [role="alert"] — it matches any alert, not the specific one.
+
+FORBIDDEN — NEVER OUTPUT THESE:
+- jQuery selectors: :contains(), :eq(), :first, :last
+- Playwright text engine: text="..." (use :has-text() or XPath)
+- Positional: li:nth-of-type(n), div:nth-child(n)
+- Long Tailwind class chains: button.w-full.mt-6.bg-blue-500
+- Generic structural selectors when specific text was named in the description
+
+EXAMPLES:
+  ✓ input[type="email"]
+  ✓ button[type="submit"]
+  ✓ [role="alert"]:has-text("Login Success")
+  ✓ [role="alert"]:has-text("Login Failed")
+  ✓ [data-testid="error-toast"]
+  ✓ li:has-text("Invalid credentials")
+  ✓ xpath=//div[@role="alert"][contains(text(),'Login Failed')]
+  ✗ li:contains("Login failed")
+  ✗ [role="alert"]   ← wrong when description specifies text
 
 Page URL: ${context.url}
-Page Title: ${context.title}
 
-Interactive Elements:
-${JSON.stringify(elements, null, 2)}
+--- INTERACTIVE ELEMENTS ---
+${JSON.stringify(interactiveElements, null, 2)}
 
-Return ONLY a valid CSS selector that uniquely identifies the element. If you need to use the index, use :nth-of-type() or similar.
-Examples of valid responses:
-- button.login-btn
-- input[type="email"]
-- a[href="/dashboard"]
-- #submit-button
+--- DISPLAY / TEXT ELEMENTS (toasts, alerts, modals, error messages) ---
+${JSON.stringify(displayElements, null, 2)}
+${textConstraintFooter}
+Respond with ONLY the selector string. No markdown, no explanation, no backticks.`;
 
-Response (CSS selector only):`;
+
 
         const response = await this.client.chat.completions.create({
             model: model,
             messages: [
                 {
                     role: 'system',
-                    content: 'You are an expert at identifying web elements. Return only valid CSS selectors, nothing else.',
+                    content: 'You are a Playwright automation expert. Return ONLY a standard CSS selector or an XPath selector prefixed with "xpath=". NEVER output jQuery selectors like :contains() — use :has-text() for CSS or xpath=//tag[contains(text(),"text")] for XPath. Return ONLY the selector string, no explanation.',
                 },
                 {
                     role: 'user',
@@ -148,14 +247,49 @@ Response (CSS selector only):`;
         const outputTokens = response.usage?.completion_tokens || 50;
         this.trackCost(model, inputTokens, outputTokens);
 
-        const selector = response.choices[0]?.message?.content?.trim() || '';
+        let rawSelector = response.choices[0]?.message?.content?.trim() || '';
+        // Strip accidental markdown code fences
+        rawSelector = rawSelector.replace(/^`+|`+$/g, '').trim();
+        // Strip label prefixes the AI sometimes copies from prompt examples
+        // e.g. "CSS: input[type='email']" → "input[type='email']"
+        //      "XPath: //div[...]"        → "xpath=//div[...]"
+        rawSelector = rawSelector.replace(/^(?:✓\s*)?CSS:\s*/i, '');
+        rawSelector = rawSelector.replace(/^(?:✓\s*)?XPath:\s*/i, 'xpath=');
 
-        try {
-            await page.waitForSelector(selector, { timeout: 2000 });
-            return selector;
-        } catch (error) {
-            throw new Error(`AI-generated selector "${selector}" not found on page for description: "${description}"`);
+        // ── Sanitize: convert jQuery :contains() to Playwright :has-text() ──
+        const sanitized = rawSelector
+            .replace(/:contains\(['"]([^'"]+)['"]\)/g, ':has-text("$1")');  // li:contains("x") → li:has-text("x")
+
+        // Build a list of candidates to try in order
+        const candidates: string[] = [sanitized];
+
+        // If the description itself contains quoted text (e.g. '"Login Failed" alert'),
+        // try XPath text-contains as a well-supported fallback (no jQuery, no Playwright-specific engines)
+        const quotedTextMatch = description.match(/["']([^"']{2,})["']/);
+        if (quotedTextMatch) {
+            const txt = quotedTextMatch[1].replace(/'/g, "\\'"); // escape for XPath
+            candidates.push(`xpath=//*[contains(text(),'${txt}')]`);
+            candidates.push(`:has-text("${txt.replace(/"/g, '')}")`);
         }
+
+        // Also try [role="alert"] as a last-resort for alert/error/toast descriptions
+        if (/alert|error|toast|notification|warning|success/i.test(description)) {
+            candidates.push('[role="alert"]', '[role="status"]', '[aria-live]');
+        }
+
+        for (const candidate of candidates) {
+            try {
+                await page.waitForSelector(candidate, { timeout: 2000 });
+                return candidate; // ← first one that works wins
+            } catch {
+                // try next candidate
+            }
+        }
+
+        throw new Error(
+            `AI-generated selector "${rawSelector}" not found on page for description: "${description}"` +
+            (candidates.length > 1 ? ` (also tried: ${candidates.slice(1).join(', ')})` : '')
+        );
     }
 
     /**
@@ -169,19 +303,12 @@ Response (CSS selector only):`;
     ): Promise<boolean> {
         const model = this.resolveModel(taskType);
         const context = await this.getPageContext(page);
-        const screenshotData = screenshot || (await this.takeScreenshot(page));
+        const isVisionModel = /gpt-4o|vision|gemini|claude-3/i.test(model);
+        const screenshotData = screenshot || (isVisionModel ? await this.takeScreenshot(page) : undefined);
 
-        const messages: any[] = [
-            {
-                role: 'system',
-                content: 'You are an expert QA tester. Analyze the page state and determine if the expectation is met. Respond with only "true" or "false".',
-            },
-            {
-                role: 'user',
-                content: [
-                    {
-                        type: 'text',
-                        text: `Page URL: ${context.url}
+        const textContent: any = {
+            type: 'text',
+            text: `Page URL: ${context.url}
 Page Title: ${context.title}
 
 Visible Text:
@@ -190,15 +317,22 @@ ${context.visibleText.substring(0, 2000)}
 Expectation: ${expectation}
 
 Does the current page state meet this expectation? Respond with only "true" or "false".`,
-                    },
-                    {
-                        type: 'image_url',
-                        image_url: {
-                            url: `data:image/png;base64,${screenshotData}`,
-                        },
-                    },
-                ],
+        };
+
+        const userMessageContent: any[] = [textContent];
+        if (screenshotData && isVisionModel) {
+            userMessageContent.push({
+                type: 'image_url',
+                image_url: { url: `data:image/png;base64,${screenshotData}` },
+            });
+        }
+
+        const messages: any[] = [
+            {
+                role: 'system',
+                content: 'You are an expert QA tester. Analyze the page state and determine if the expectation is met. Respond with only "true" or "false".',
             },
+            { role: 'user', content: userMessageContent },
         ];
 
         const response = await this.client.chat.completions.create({
@@ -256,7 +390,10 @@ Analyze this test failure and provide a JSON response with category, rootCause, 
             },
         ];
 
-        if (screenshot) {
+        // Only include screenshot if the model supports vision
+        // (gpt-4o, gpt-4-vision-preview, gpt-4-turbo with vision, etc.)
+        const isVisionModel = /gpt-4o|vision|gemini|claude-3/i.test(model);
+        if (screenshot && isVisionModel) {
             userContent.push({
                 type: 'image_url',
                 image_url: {
