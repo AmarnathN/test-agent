@@ -1,16 +1,16 @@
 {
   "version": 1,
-  "updatedAt": 1772627449723,
+  "updatedAt": 1772628361122,
   "entries": {
     "ap-frontend-mu.vercel.app:email input": {
       "intent": "ap-frontend-mu.vercel.app:email input",
       "selectors": [
         {
           "selector": "#email",
-          "confidence": 0.92,
-          "successCount": 7,
-          "failureCount": 0,
-          "lastVerified": 1772626906100,
+          "confidence": 0.884,
+          "successCount": 8,
+          "failureCount": 1,
+          "lastVerified": 1772628359133,
           "source": "ai",
           "selectorType": "css",
           "aiProvider": "customllm",
@@ -23,10 +23,10 @@
       "selectors": [
         {
           "selector": "#password",
-          "confidence": 0.92,
-          "successCount": 7,
+          "confidence": 0.9400000000000001,
+          "successCount": 9,
           "failureCount": 0,
-          "lastVerified": 1772626906133,
+          "lastVerified": 1772628359160,
           "source": "ai",
           "selectorType": "css",
           "aiProvider": "customllm",
@@ -39,10 +39,10 @@
       "selectors": [
         {
           "selector": "button:has-text(\"Sign in\")",
-          "confidence": 0.92,
-          "successCount": 7,
+          "confidence": 0.9400000000000001,
+          "successCount": 9,
           "failureCount": 0,
-          "lastVerified": 1772626906177,
+          "lastVerified": 1772628359203,
           "source": "ai",
           "selectorType": "css",
           "aiProvider": "customllm",
@@ -55,10 +55,10 @@
       "selectors": [
         {
           "selector": ":has-text(\"Login Failed\")",
-          "confidence": 0.86,
-          "successCount": 1,
+          "confidence": 0.87,
+          "successCount": 2,
           "failureCount": 0,
-          "lastVerified": 1772626319029,
+          "lastVerified": 1772628361122,
           "source": "ai",
           "selectorType": "css",
           "aiProvider": "customllm",
@@ -71,10 +71,10 @@
       "selectors": [
         {
           "selector": "a:has-text(\"Learn more\")",
-          "confidence": 0.85,
-          "successCount": 0,
+          "confidence": 0.86,
+          "successCount": 1,
           "failureCount": 0,
-          "lastVerified": 1772627449723,
+          "lastVerified": 1772628274795,
           "source": "ai",
           "selectorType": "css",
           "aiProvider": "customllm",

@@ -1,15 +1,35 @@
 import { test } from '../../src/fixtures';
 
-test('Example web automation test', async ({ agent }) => {
-  // Navigate to example page
-  await agent.navigate('https://example.com');
+test('Example Login Pass Test', async ({ agent }) => {
+  // Navigate to login page
+  await agent.navigate('https://ap-frontend-mu.vercel.app/auth/login');
+
+  // Fill in credentials using natural language
+  await agent.fill('email input', 'user@example.com');
+  await agent.fill('password field', 'password123');
+
+  // Click login button
+  await agent.click('Sign in button');
 
   // Validate expectations using AI
-  await agent.expect('text "Example Domain" should be visible');
+  // await agent.expect('Login Success alert message');
+  await agent.expectVisibility('text "Login Success"');
+});
 
-  // Verify click functionality
-  await agent.click('More information link');
 
-  // Check that navigation succeeded by looking for standard IANA text
-  await agent.expect('text "IANA" should be visible');
+
+test('Example Login Failure Test', async ({ agent }) => {
+  // Navigate to login page
+  await agent.navigate('https://ap-frontend-mu.vercel.app/auth/login');
+
+  // Fill in credentials using natural language
+  await agent.fill('email input', 'user@example.com');
+  await agent.fill('password field', 'password123');
+
+  // Click login button
+  await agent.click('Sign in button');
+
+  // Validate expectations using AI
+  // await agent.expect('Login failed alert message');
+  await agent.expectVisibility('text "Login Failed"');
 });
