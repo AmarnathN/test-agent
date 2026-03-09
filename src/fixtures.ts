@@ -37,6 +37,7 @@ export const test = base.extend<AITestFixtures>({
                 endpoint: config.customLLM.endpoint,
                 apiKey: config.customLLM.apiKey,
                 model: config.customLLM.model,
+                maxCostPerRun: config.costControl?.maxCostPerRun,
             });
         } else {
             aiProvider = new OpenAIProvider(config);
@@ -51,9 +52,42 @@ export const test = base.extend<AITestFixtures>({
         const agent = new BrowserAgent(controller, context, aiProvider, logger);
         agent.setSelectorCache(selectorCache);
 
+        // Token usage is tracked by provider during AI calls; capture per-test delta.
+        const usageBefore = aiProvider.getUsage();
+
         // Hand the agent to the test; cleanup happens automatically because
         // Playwright manages the page/context lifecycle.
         await use(agent);
+
+        const usageAfter = aiProvider.getUsage();
+        const testInputTokens = Math.max(0, usageAfter.inputTokens - usageBefore.inputTokens);
+        const testOutputTokens = Math.max(0, usageAfter.outputTokens - usageBefore.outputTokens);
+        logger.info(`AI Tokens: in=${testInputTokens}, out=${testOutputTokens}`);
+
+        // Attach token metadata so it is visible from Playwright HTML report.
+        await testInfo.attach('AI Tokens', {
+            body: Buffer.from(JSON.stringify({ inputTokens: testInputTokens, outputTokens: testOutputTokens }, null, 2), 'utf-8'),
+            contentType: 'application/json',
+        });
+        testInfo.annotations.push({
+            type: 'AI Tokens',
+            description: `in=${testInputTokens}, out=${testOutputTokens}`,
+        });
+
+        const stepCosts = agent.getSteps().map((step, index) => ({
+            step: index + 1,
+            action: step.action,
+            description: step.description,
+            status: step.status,
+            durationMs: step.duration ?? null,
+            inputTokens: step.inputTokens ?? 0,
+            outputTokens: step.outputTokens ?? 0,
+        }));
+
+        await testInfo.attach('AI Step Tokens', {
+            body: Buffer.from(JSON.stringify(stepCosts, null, 2), 'utf-8'),
+            contentType: 'application/json',
+        });
 
         // ── Post-test: attach AI failure analysis when the test failed ──────
         if (testInfo.status === 'failed' || testInfo.status === 'timedOut') {

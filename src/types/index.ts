@@ -100,6 +100,8 @@ export interface TestStep {
     status: 'passed' | 'failed' | 'running';
     startTime: number;       // Date.now() timestamp
     duration?: number;       // ms
+    inputTokens?: number;    // Input tokens consumed during this step
+    outputTokens?: number;   // Output tokens consumed during this step
     screenshot?: string;     // base64 PNG taken after this step
     error?: string;
 }
@@ -217,6 +219,7 @@ export interface FrameworkConfig {
         maxCostPerRun?: number;
         maxTokensPerRun?: number;
         warnAtPercent?: number;
+        reportCost?: boolean;
     };
 
     // AI Optimization
@@ -274,6 +277,16 @@ export interface AIProvider {
         difference: number;
         analysis: string;
     }>;
+
+    /**
+     * Get the total cost spent by this provider
+     */
+    getSpent(): number;
+
+    /**
+     * Get cumulative token usage
+     */
+    getUsage(): { inputTokens: number; outputTokens: number };
 }
 
 /**

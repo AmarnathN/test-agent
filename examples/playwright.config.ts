@@ -4,7 +4,8 @@ import * as dotenv from 'dotenv';
 dotenv.config();
 
 export default defineConfig({
-    testDir: './examples',
+    // Config file lives in examples/, so use current directory for test discovery.
+    testDir: '.',
 
     /* Timeout per test */
     timeout: 60_000,

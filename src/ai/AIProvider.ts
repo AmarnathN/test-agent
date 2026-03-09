@@ -63,6 +63,16 @@ export abstract class BaseAIProvider implements AIProvider {
     }>;
 
     /**
+     * Get the total cost spent by this provider
+     */
+    abstract getSpent(): number;
+
+    /**
+     * Get cumulative token usage
+     */
+    abstract getUsage(): { inputTokens: number; outputTokens: number };
+
+    /**
      * Helper method to extract page context for AI analysis
      */
     protected async getPageContext(controller: BrowserController): Promise<{

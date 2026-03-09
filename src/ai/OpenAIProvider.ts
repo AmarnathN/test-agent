@@ -11,6 +11,8 @@ export class OpenAIProvider extends BaseAIProvider {
     private client: OpenAI;
     protected config: FrameworkConfig['ai'];
     private costTracker: CostTracker;
+    private totalInputTokens: number = 0;
+    private totalOutputTokens: number = 0;
 
     // Default Routing Table
     private defaultRouting: Record<AITaskType, ModelTier> = {
@@ -75,6 +77,8 @@ export class OpenAIProvider extends BaseAIProvider {
      * Track cost for a call
      */
     private trackCost(model: string, inputTokens: number, outputTokens: number) {
+        this.totalInputTokens += inputTokens;
+        this.totalOutputTokens += outputTokens;
         const cost = CostTracker.estimateCost(model, inputTokens, outputTokens);
         this.costTracker.track(cost);
     }
@@ -478,6 +482,20 @@ Analyze this test failure and provide a JSON response with category, rootCause, 
             similar: result.similar || false,
             difference: result.difference || 100,
             analysis: result.analysis || 'Unable to compare screenshots',
+        };
+    }
+
+    /**
+     * Get the total cost spent by this provider
+     */
+    getSpent(): number {
+        return this.costTracker.getSpent();
+    }
+
+    getUsage(): { inputTokens: number; outputTokens: number } {
+        return {
+            inputTokens: this.totalInputTokens,
+            outputTokens: this.totalOutputTokens,
         };
     }
 }

@@ -45,11 +45,15 @@ export class BrowserAgent implements IBrowserAgent {
         captureScreenshot = false,
     ): Promise<T> {
         const step: TestStep = { action, description, status: 'running', startTime: Date.now() };
+        const usageBefore = this.aiProvider.getUsage();
         this.steps.push(step);
         try {
             const result = await fn();
             step.status = 'passed';
             step.duration = Date.now() - step.startTime;
+            const usageAfter = this.aiProvider.getUsage();
+            step.inputTokens = Math.max(0, usageAfter.inputTokens - usageBefore.inputTokens);
+            step.outputTokens = Math.max(0, usageAfter.outputTokens - usageBefore.outputTokens);
             if (captureScreenshot) {
                 step.screenshot = await this.takeScreenshot(`step-${this.steps.length}`);
             }
@@ -57,6 +61,9 @@ export class BrowserAgent implements IBrowserAgent {
         } catch (err) {
             step.status = 'failed';
             step.duration = Date.now() - step.startTime;
+            const usageAfter = this.aiProvider.getUsage();
+            step.inputTokens = Math.max(0, usageAfter.inputTokens - usageBefore.inputTokens);
+            step.outputTokens = Math.max(0, usageAfter.outputTokens - usageBefore.outputTokens);
             step.error = String(err);
             try { step.screenshot = await this.takeScreenshot(`step-${this.steps.length}-fail`); } catch { /* ignore */ }
             throw err;
@@ -194,43 +201,54 @@ export class BrowserAgent implements IBrowserAgent {
      */
     async expectNavigation(urlOrTitle: string): Promise<void> {
         this.logger.info(`Expect navigation: ${urlOrTitle}`);
-        try {
-            if (urlOrTitle.includes('http') || urlOrTitle.includes('/')) {
-                // Check URL
-                const expectedUrl = urlOrTitle.replace(/should.*to/, '').trim(); // simplistic
-                await this.controller.waitForTimeout(1000);
-                const currentUrl = this.controller.url();
-                if (!currentUrl.includes(expectedUrl)) {
-                    // Try polling for a bit
+        await this.recordStep('expectNavigation', `Expect navigation: ${urlOrTitle}`, async () => {
+            try {
+                if (urlOrTitle.includes('http') || urlOrTitle.includes('/')) {
+                    // Check URL
+                    const expectedUrl = urlOrTitle.replace(/should.*to/, '').trim(); // simplistic
+                    await this.controller.waitForTimeout(1000);
+                    const currentUrl = this.controller.url();
+                    if (!currentUrl.includes(expectedUrl)) {
+                        // Try polling for a bit
+                        let found = false;
+                        for (let i = 0; i < 10; i++) {
+                            await this.controller.waitForTimeout(1000);
+                            if (this.controller.url().includes(expectedUrl)) {
+                                found = true;
+                                break;
+                            }
+                        }
+                        if (!found) throw new Error(`URL did not include ${expectedUrl}`);
+                    }
+                } else {
+                    // Check Title
+                    const expectedTitle = urlOrTitle.replace(/.*?title should be/i, '').replace(/["']/g, '').trim();
                     let found = false;
                     for (let i = 0; i < 10; i++) {
-                        await this.controller.waitForTimeout(1000);
-                        if (this.controller.url().includes(expectedUrl)) {
+                        const t = await this.controller.title();
+                        if (t.includes(expectedTitle)) {
                             found = true;
                             break;
                         }
+                        await this.controller.waitForTimeout(1000);
                     }
-                    if (!found) throw new Error(`URL did not include ${expectedUrl}`);
+                    if (!found) throw new Error(`Title did not include expected string ${expectedTitle}`);
                 }
-            } else {
-                // Check Title
-                const expectedTitle = urlOrTitle.replace(/.*?title should be/i, '').replace(/['"]/g, '').trim();
-                let found = false;
-                for (let i = 0; i < 10; i++) {
-                    const t = await this.controller.title();
-                    if (t.includes(expectedTitle)) {
-                        found = true;
-                        break;
-                    }
-                    await this.controller.waitForTimeout(1000);
+            } catch (error) {
+                // Fallback to AI if simple check fails
+                this.logger.warn(`Navigation check failed, falling back to AI: ${error}`);
+                const screenshot = await this.takeScreenshot(`expectation-${Date.now()}`);
+                const isValid = await this.aiProvider.validateExpectation(
+                    this.controller,
+                    urlOrTitle,
+                    screenshot,
+                    AITaskType.EXPECTATION_VALIDATION
+                );
+                if (!isValid) {
+                    throw new Error(`Expectation not met: ${urlOrTitle}`);
                 }
-                if (!found) throw new Error(`Title did not include expected string ${expectedTitle}`);
             }
-        } catch (error) {
-            // Fallback to AI if simple check fails
-            this.logger.warn(`Navigation check failed, falling back to AI: ${error}`);
-            await this.expectVisual(urlOrTitle);
-        }
+        });
     }
 
     /**
@@ -238,16 +256,18 @@ export class BrowserAgent implements IBrowserAgent {
      */
     async expectVisibility(selector: string, isVisible: boolean = true): Promise<void> {
         this.logger.info(`Expect visibility: "${selector}" should be ${isVisible ? 'visible' : 'hidden'}`);
-        try {
-            const actualSelector = await this.findElementOptimized(selector);
-            if (isVisible) {
-                await this.controller.waitForSelector(actualSelector, { state: 'visible', timeout: 10000 });
-            } else {
-                await this.controller.waitForSelector(actualSelector, { state: 'hidden', timeout: 10000 });
+        await this.recordStep('expectVisibility', `Expect "${selector}" to be ${isVisible ? 'visible' : 'hidden'}`, async () => {
+            try {
+                const actualSelector = await this.findElementOptimized(selector);
+                if (isVisible) {
+                    await this.controller.waitForSelector(actualSelector, { state: 'visible', timeout: 10000 });
+                } else {
+                    await this.controller.waitForSelector(actualSelector, { state: 'hidden', timeout: 10000 });
+                }
+            } catch (error) {
+                throw new Error(`Visibility check failed for ${selector}: ${error}`);
             }
-        } catch (error) {
-            throw new Error(`Visibility check failed for ${selector}: ${error}`);
-        }
+        });
     }
 
     /**
@@ -256,61 +276,72 @@ export class BrowserAgent implements IBrowserAgent {
      */
     async expectText(text: string, selector?: string, timeout = 10_000, isHiddenCheck = false): Promise<void> {
         this.logger.info(`Expect text: "${text}" in ${selector || 'page'} to be ${isHiddenCheck ? 'hidden' : 'visible'}`);
-        try {
-            if (selector && selector !== 'page' && selector !== 'body') {
-                // Scoped check: wait for element then assert its text
-                const actualSelector = await this.findElementOptimized(selector);
-                const locator = this.controller.locator(actualSelector);
-                await locator.waitFor({ timeout });
-                const content = await locator.textContent();
-                if (!content?.includes(text)) {
-                    throw new Error(`Text "${text}" not found in element "${selector}" (Found: "${content}")`);
-                }
-            } else {
-                // Global page check: poll the live DOM via waitForFunction so
-                // transient text (toasts, flash messages) is caught immediately.
-                // Manual fallback polling
-                const pollingInterval = 500; // ms
-                const maxLoops = timeout / pollingInterval;
-                let pollingIndex = 0;
-                let found = false;
-                let currentText = '';
+        await this.recordStep('expectText', `Expect text "${text}" in ${selector || 'page'} to be ${isHiddenCheck ? 'hidden' : 'visible'}`, async () => {
+            try {
+                if (selector && selector !== 'page' && selector !== 'body') {
+                    // Scoped check: wait for element then assert its text
+                    const actualSelector = await this.findElementOptimized(selector);
+                    const locator = this.controller.locator(actualSelector);
+                    await locator.waitFor({ timeout });
+                    const content = await locator.textContent();
+                    if (!content?.includes(text)) {
+                        throw new Error(`Text "${text}" not found in element "${selector}" (Found: "${content}")`);
+                    }
+                } else {
+                    // Global page check: poll the live DOM via waitForFunction so
+                    // transient text (toasts, flash messages) is caught immediately.
+                    // Manual fallback polling
+                    const pollingInterval = 500; // ms
+                    const maxLoops = timeout / pollingInterval;
+                    let pollingIndex = 0;
+                    let found = false;
+                    let currentText = '';
 
-                while (pollingIndex < maxLoops) {
-                    currentText = await this.controller.evaluate(() => document.body?.innerText || '');
-                    const textPresent = currentText.includes(text);
+                    while (pollingIndex < maxLoops) {
+                        currentText = await this.controller.evaluate(() => document.body?.innerText || '');
+                        const textPresent = currentText.includes(text);
 
-                    if (isHiddenCheck) {
-                        if (!textPresent) {
-                            found = true; // Text is hidden (not present)
-                            break;
+                        if (isHiddenCheck) {
+                            if (!textPresent) {
+                                found = true; // Text is hidden (not present)
+                                break;
+                            }
+                        } else {
+                            if (textPresent) {
+                                found = true; // Text is visible (present)
+                                break;
+                            }
                         }
-                    } else {
-                        if (textPresent) {
-                            found = true; // Text is visible (present)
-                            break;
-                        }
+
+                        await this.controller.waitForTimeout(pollingInterval);
+                        pollingIndex++;
                     }
 
-                    await this.controller.waitForTimeout(pollingInterval);
-                    pollingIndex++;
-                }
-
-                if (!found) {
-                    if (isHiddenCheck) {
-                        throw new Error(`Text "${text}" never disappeared after ${timeout}ms`);
+                    if (!found) {
+                        if (isHiddenCheck) {
+                            throw new Error(`Text "${text}" never disappeared after ${timeout}ms`);
+                        }
+                        throw new Error(
+                            `Text "${text}" was not ${isHiddenCheck ? 'hidden' : 'visible'} after ${timeout}ms.\n` +
+                            `Page content seen text: "${currentText.substring(0, 200)}..."`
+                        );
                     }
-                    throw new Error(
-                        `Text "${text}" was not ${isHiddenCheck ? 'hidden' : 'visible'} after ${timeout}ms.\n` +
-                        `Page content seen text: "${currentText.substring(0, 200)}..."`
-                    );
+                }
+            } catch (error) {
+                this.logger.warn(`Text check failed statically, falling back to AI visual validation: ${error}`);
+                // Let AI handle complex text assertions (like canvas, images, ShadowDOM, strict layouts)
+                const screenshot = await this.takeScreenshot(`expectation-${Date.now()}`);
+                const isValid = await this.aiProvider.validateExpectation(
+                    this.controller,
+                    `expect ${selector || 'the page'} to ${isHiddenCheck ? 'NOT contain' : 'contain'} the text "${text}"`,
+                    screenshot,
+                    AITaskType.EXPECTATION_VALIDATION
+                );
+                if (!isValid) {
+                    throw new Error(`Expectation not met: expect ${selector || 'the page'} to ${isHiddenCheck ? 'NOT contain' : 'contain'} the text "${text}"`);
                 }
             }
-        } catch (error) {
-            this.logger.warn(`Text check failed statically, falling back to AI visual validation: ${error}`);
-            // Let AI handle complex text assertions (like canvas, images, ShadowDOM, strict layouts)
-            await this.expectVisual(`expect ${selector || 'the page'} to ${isHiddenCheck ? 'NOT contain' : 'contain'} the text "${text}"`);
-        }
+        });
     }
 
     /**
@@ -318,23 +349,24 @@ export class BrowserAgent implements IBrowserAgent {
      */
     async expectVisual(expectation: string): Promise<void> {
         this.logger.info(`Validating visual expectation (AI): ${expectation}`);
+        await this.recordStep('expectVisual', `Validate visual expectation: ${expectation}`, async () => {
+            // Take screenshot for AI analysis
+            const screenshot = await this.takeScreenshot(`expectation-${Date.now()}`);
 
-        // Take screenshot for AI analysis
-        const screenshot = await this.takeScreenshot(`expectation-${Date.now()}`);
+            // Use AI to validate the expectation
+            const isValid = await this.aiProvider.validateExpectation(
+                this.controller,
+                expectation,
+                screenshot,
+                AITaskType.EXPECTATION_VALIDATION
+            );
 
-        // Use AI to validate the expectation
-        const isValid = await this.aiProvider.validateExpectation(
-            this.controller,
-            expectation,
-            screenshot,
-            AITaskType.EXPECTATION_VALIDATION
-        );
+            if (!isValid) {
+                throw new Error(`Expectation not met: ${expectation}`);
+            }
 
-        if (!isValid) {
-            throw new Error(`Expectation not met: ${expectation}`);
-        }
-
-        this.logger.info(`✓ Expectation met: ${expectation}`);
+            this.logger.info(`✓ Expectation met: ${expectation}`);
+        });
     }
 
     /**

@@ -45,6 +45,7 @@ export class TestRunner {
                 endpoint: config.customLLM.endpoint,
                 apiKey: config.customLLM.apiKey,
                 model: config.customLLM.model,
+                maxCostPerRun: config.costControl?.maxCostPerRun,
             });
         } else {
             throw new Error('Invalid AI provider configuration');
@@ -98,11 +99,14 @@ export class TestRunner {
             results,
         };
 
+        const totalUsage = this.aiProvider.getUsage();
+
         this.logger.info(`\nTest execution completed:`);
         this.logger.info(`  Total: ${tests.length}`);
         this.logger.info(`  Passed: ${passed}`);
         this.logger.info(`  Failed: ${failed}`);
         this.logger.info(`  Skipped: ${skipped}`);
+        this.logger.info(`  Total AI Tokens: in=${totalUsage.inputTokens}, out=${totalUsage.outputTokens}`);
 
         return suiteResult;
     }
@@ -115,6 +119,7 @@ export class TestRunner {
         testLogger.info(`Starting test: ${test.name}`);
 
         const startTime = Date.now();
+        const startUsage = this.aiProvider.getUsage();
         const screenshots: string[] = [];
         let videoPath: string | undefined;
         let agent: BrowserAgent | undefined;
@@ -162,7 +167,10 @@ export class TestRunner {
             await context.close();
 
             const duration = Date.now() - startTime;
-            testLogger.info(`✓ Test passed in ${duration}ms`);
+            const endUsage = this.aiProvider.getUsage();
+            const testInputTokens = Math.max(0, endUsage.inputTokens - startUsage.inputTokens);
+            const testOutputTokens = Math.max(0, endUsage.outputTokens - startUsage.outputTokens);
+            testLogger.info(`✓ Test passed in ${duration}ms (AI Tokens in=${testInputTokens}, out=${testOutputTokens})`);
 
             return {
                 name: test.name,
@@ -176,7 +184,10 @@ export class TestRunner {
 
         } catch (error) {
             const duration = Date.now() - startTime;
-            testLogger.error(`✗ Test failed in ${duration}ms`, error as Error);
+            const endUsage = this.aiProvider.getUsage();
+            const testInputTokens = Math.max(0, endUsage.inputTokens - startUsage.inputTokens);
+            const testOutputTokens = Math.max(0, endUsage.outputTokens - startUsage.outputTokens);
+            testLogger.error(`✗ Test failed in ${duration}ms (AI Tokens in=${testInputTokens}, out=${testOutputTokens})`, error as Error);
 
             // Analyze failure using AI
             let failureAnalysis;

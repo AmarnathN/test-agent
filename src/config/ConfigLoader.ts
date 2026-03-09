@@ -26,6 +26,7 @@ export class ConfigLoader {
             maxCostPerRun: 5.00,      // Hard limit $5.00
             maxTokensPerRun: 100000,   // Hard limit 100k tokens
             warnAtPercent: 80,
+            reportCost: true,         // Expose AI cost by default
         },
         reporters: ['html', 'junit'],
         outputDir: 'ai-test-results',

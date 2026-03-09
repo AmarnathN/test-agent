@@ -175,12 +175,16 @@ export class HTMLReporter implements Reporter {
       const icon = step.status === 'passed' ? '✓' : step.status === 'failed' ? '✗' : '⟳';
       const cls = step.status;
       const dur = step.duration != null ? `${step.duration}ms` : '';
+      const inTokens = step.inputTokens ?? 0;
+      const outTokens = step.outputTokens ?? 0;
       return `
         <div class="step step-${cls}">
           <span class="step-num">${i + 1}</span>
           <span class="step-icon ${cls}">${icon}</span>
           <span class="step-action">${step.action}</span>
           <span class="step-desc">${this.escapeHtml(step.description)}</span>
+          <span class="step-token-in">in: ${inTokens}</span>
+          <span class="step-token-out">out: ${outTokens}</span>
           <span class="step-dur">${dur}</span>
           ${step.error ? `<div class="step-error">${this.escapeHtml(step.error)}</div>` : ''}
           ${step.screenshot ? `<img class="step-screenshot" src="data:image/png;base64,${step.screenshot}" onclick="openModal(this.src)" title="Step ${i + 1} screenshot">` : ''}
@@ -504,6 +508,8 @@ export class HTMLReporter implements Reporter {
       .step-icon.failed { color: #f56565; }
       .step-action { background: #edf2f7; color: #4a5568; padding: 1px 7px; border-radius: 10px; font-size: 0.78rem; font-weight: 600; white-space: nowrap; }
       .step-desc { flex: 1; color: #2d3748; }
+      .step-token-in { color: #2b6cb0; font-size: 0.8rem; font-weight: 700; white-space: nowrap; }
+      .step-token-out { color: #b7791f; font-size: 0.8rem; font-weight: 700; white-space: nowrap; }
       .step-dur { color: #a0aec0; font-size: 0.8rem; white-space: nowrap; }
       .step-error { width: 100%; margin-top: 4px; margin-left: 52px; color: #c53030; font-family: monospace; font-size: 0.82rem; white-space: pre-wrap; word-break: break-word; }
       .step-screenshot { width: 80px; height: auto; border-radius: 4px; cursor: pointer; border: 1px solid #e2e8f0; transition: transform 0.15s; }
