@@ -158,7 +158,7 @@ export class CustomLLMProvider extends BaseAIProvider {
                     messages: [
                         {
                             role: 'system',
-                            content: 'You are a Playwright automation expert. Return ONLY a standard CSS selector or an XPath selector prefixed with "xpath=". NEVER output jQuery selectors like :contains() — use :has-text() for CSS or xpath=//tag[contains(text(),"text")] for XPath. Return ONLY the selector string, no explanation.',
+                            content: 'You are a browser automation expert. Return ONLY a standard CSS selector or an XPath selector prefixed with "xpath=". NEVER output jQuery selectors like :contains() or framework-specific selector engines. Return ONLY the selector string, no explanation.',
                         },
                         {
                             role: 'user',

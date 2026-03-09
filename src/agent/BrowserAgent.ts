@@ -1,4 +1,3 @@
-import { BrowserContext } from '@playwright/test';
 import { BrowserAgent as IBrowserAgent, WaitOptions, AITaskType, TestStep, BrowserController } from '../types';
 import { BaseAIProvider } from '../ai/AIProvider';
 import { Logger } from '../utils/Logger';
@@ -15,9 +14,7 @@ export class BrowserAgent implements IBrowserAgent {
     private selectorCache?: SelectorCache;
     private steps: TestStep[] = [];
 
-    // Note: BrowserContext is kept here temporarily if needed for broad session state, 
-    // but actual interactions are pushed through BrowserController.
-    constructor(controller: BrowserController, _context: BrowserContext, aiProvider: BaseAIProvider, logger: Logger) {
+    constructor(controller: BrowserController, aiProvider: BaseAIProvider, logger: Logger) {
         this.controller = controller;
         this.aiProvider = aiProvider;
         this.logger = logger;

@@ -166,14 +166,14 @@ export class OpenAIProvider extends BaseAIProvider {
         const quotedInDescription = description.match(/["'""]([^"'""]{2,})["'""]/)?.[1] ?? null;
 
         const textConstraintBlock = quotedInDescription
-            ? `\n⛔ MANDATORY for THIS request: the description explicitly names the text "${quotedInDescription}".\n   Your selector MUST include: has - text("${quotedInDescription}").\n   Example: [role = "alert"]: has - text("${quotedInDescription}") \n   A selector without this text is INCORRECT and will be rejected.\n`
+            ? `\nMANDATORY for THIS request: the description explicitly names the text "${quotedInDescription}".\n   Your selector MUST include that text constraint, preferably via XPath contains(text(), ...).\n   Example: xpath=//*[@role="alert"][contains(normalize-space(.),"${quotedInDescription}")]\n   A selector without this text is INCORRECT and will be rejected.\n`
             : '';
 
         const textConstraintFooter = quotedInDescription
-            ? `\nFINAL REMINDER: your selector MUST include: has - text("${quotedInDescription}").Do NOT return [role = "alert"] or any selector that omits this text.`
+            ? `\nFINAL REMINDER: your selector MUST include text matching "${quotedInDescription}". Do NOT return [role="alert"] or any selector that omits this text.`
             : '';
 
-        const prompt = `You are an expert at writing STABLE, NON - FLAKY selectors for Playwright automated testing.
+        const prompt = `You are an expert at writing stable, non-flaky selectors for browser automation.
     ${textConstraintBlock}
 Your task: return exactly ONE selector that uniquely identifies the element described as: "${description}"
 
@@ -191,8 +191,7 @@ ALLOWED SELECTOR STRATEGIES(in priority order):
     1. CSS: [data - testid="..."] or[data - cy= "..."]
 2. CSS: [role = "alert"], [role = "status"], [role = "dialog"]
 3. CSS: [aria - live="polite"] or[aria - live= "assertive"]
-4. CSS + Playwright extension: : has - text("exact text")  — e.g.li: has - text("Login failed")
-5. XPath: xpath =//TYPE[contains(text(),'TEXT')]  — e.g. xpath=//div[contains(text(),'Login Failed')]
+4. XPath: xpath =//TYPE[contains(text(),'TEXT')]  — e.g. xpath=//div[contains(text(),'Login Failed')]
     6. CSS: [class*= "semantic-class-name"](partial class — only semantic names, not Tailwind utilities)
 
 ⚠️  CRITICAL TEXT RULE:
@@ -201,7 +200,7 @@ NEVER return a bare[role = "alert"] — it matches any alert, not the specific o
 
     FORBIDDEN — NEVER OUTPUT THESE:
 - jQuery selectors: : contains(), : eq(), : first, : last
-    - Playwright text engine: text = "..."(use : has - text() or XPath)
+    - Framework-specific selector engines(only standard CSS or XPath)
         - Positional: li: nth - of - type(n), div: nth - child(n)
             - Long Tailwind class chains: button.w - full.mt - 6.bg - blue - 500
                 - Generic structural selectors when specific text was named in the description
@@ -209,10 +208,10 @@ NEVER return a bare[role = "alert"] — it matches any alert, not the specific o
 EXAMPLES:
   ✓ input[type = "email"]
   ✓ button[type = "submit"]
-  ✓[role = "alert"]: has - text("Login Success")
-  ✓[role = "alert"]: has - text("Login Failed")
+    ✓ xpath=//*[@role="alert"][contains(normalize-space(.),"Login Success")]
+    ✓ xpath=//*[@role="alert"][contains(normalize-space(.),"Login Failed")]
   ✓[data - testid="error-toast"]
-  ✓ li: has - text("Invalid credentials")
+    ✓ xpath=//li[contains(normalize-space(.),"Invalid credentials")]
   ✓ xpath =//div[@role="alert"][contains(text(),'Login Failed')]
   ✗ li: contains("Login failed")
   ✗[role = "alert"]   ← wrong when description specifies text
@@ -234,7 +233,7 @@ Respond with ONLY the selector string.No markdown, no explanation, no backticks.
             messages: [
                 {
                     role: 'system',
-                    content: 'You are a Playwright automation expert. Return ONLY a standard CSS selector or an XPath selector prefixed with "xpath=". NEVER output jQuery selectors like :contains() — use :has-text() for CSS or xpath=//tag[contains(text(),"text")] for XPath. Return ONLY the selector string, no explanation.',
+                    content: 'You are a browser automation expert. Return ONLY a standard CSS selector or an XPath selector prefixed with "xpath=". NEVER output jQuery selectors like :contains() or framework-specific selector engines. Return ONLY the selector string, no explanation.',
                 },
                 {
                     role: 'user',
@@ -259,9 +258,9 @@ Respond with ONLY the selector string.No markdown, no explanation, no backticks.
         rawSelector = rawSelector.replace(/^(?:✓\s*)?CSS:\s*/i, '');
         rawSelector = rawSelector.replace(/^(?:✓\s*)?XPath:\s*/i, 'xpath=');
 
-        // ── Sanitize: convert jQuery :contains() to Playwright :has-text() ──
+        // Convert jQuery :contains("...") into a framework-neutral XPath fallback.
         const sanitized = rawSelector
-            .replace(/:contains\(['"]([^'"]+)['"]\)/g, ':has-text("$1")');  // li:contains("x") → li:has-text("x")
+            .replace(/:contains\(['"]([^'"]+)['"]\)/g, 'xpath=//*[contains(normalize-space(.),"$1")]');
 
         // Build a list of candidates to try in order
         const candidates: string[] = [sanitized];
@@ -272,7 +271,6 @@ Respond with ONLY the selector string.No markdown, no explanation, no backticks.
         if (quotedTextMatch) {
             const txt = quotedTextMatch[1].replace(/'/g, "\\'"); // escape for XPath
             candidates.push(`xpath =//*[contains(text(),'${txt}')]`);
-            candidates.push(`:has-text("${txt.replace(/"/g, '')}")`);
         }
 
         // Also try [role="alert"] as a last-resort for alert/error/toast descriptions

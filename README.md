@@ -71,7 +71,7 @@ OPENAI_API_KEY=your-api-key-here
 Create `examples/login.test.ts`:
 
 ```typescript
-import { test } from 'web-agentic-ai';
+import { test } from 'web-agentic-ai/playwright/fixtures';
 
 test('User can login', async ({ agent }) => {
   await agent.navigate('https://your-app.com/login');
@@ -99,6 +99,9 @@ Edit `ai-test.config.js`:
 
 ```javascript
 module.exports = {
+  // Adapter selection
+  framework: 'playwright', // 'playwright' | 'cypress' | 'selenium'
+
   // Browser settings
   browser: 'chromium', // 'chromium', 'firefox', or 'webkit'
   headless: true,
@@ -138,7 +141,7 @@ module.exports = {
 ### Basic Test Structure
 
 ```typescript
-import { test } from 'web-agentic-ai';
+import { test } from 'web-agentic-ai/playwright/fixtures';
 
 test('Test name', async ({ agent }) => {
   // Your test code

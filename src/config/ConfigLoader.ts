@@ -8,6 +8,7 @@ import * as dotenv from 'dotenv';
  */
 export class ConfigLoader {
     private static DEFAULT_CONFIG: FrameworkConfig = {
+        framework: 'playwright',
         browser: 'chromium',
         headless: true,
         viewport: { width: 1280, height: 720 },
@@ -71,6 +72,10 @@ export class ConfigLoader {
      * Load configuration from environment variables
      */
     private static loadFromEnv(config: FrameworkConfig): FrameworkConfig {
+        if (process.env.AI_TEST_FRAMEWORK) {
+            config.framework = process.env.AI_TEST_FRAMEWORK as any;
+        }
+
         if (process.env.AI_TEST_BROWSER) {
             config.browser = process.env.AI_TEST_BROWSER as any;
         }
@@ -128,6 +133,11 @@ export class ConfigLoader {
      * Validate configuration
      */
     private static validate(config: FrameworkConfig): void {
+        const framework = config.framework || 'playwright';
+        if (!['playwright', 'cypress', 'selenium'].includes(framework)) {
+            throw new Error(`Invalid framework: ${framework}. Must be playwright, cypress, or selenium`);
+        }
+
         if (config.aiProvider === 'openai' && !config.openai?.apiKey) {
             throw new Error('OpenAI API key is required. Set OPENAI_API_KEY environment variable or configure in ai-test.config.js');
         }
@@ -136,7 +146,7 @@ export class ConfigLoader {
             throw new Error('Custom LLM endpoint is required when using custom AI provider');
         }
 
-        if (!['chromium', 'firefox', 'webkit'].includes(config.browser || '')) {
+        if (framework === 'playwright' && !['chromium', 'firefox', 'webkit'].includes(config.browser || '')) {
             throw new Error(`Invalid browser: ${config.browser}. Must be chromium, firefox, or webkit`);
         }
     }

@@ -1,4 +1,4 @@
-import { test } from '../../src/dsl/TestCollector';
+import { test } from 'web-agentic-ai/playwright/fixtures';
 
 /**
  * Example: Visual regression test for homepage

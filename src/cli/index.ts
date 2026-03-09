@@ -6,6 +6,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { spawnSync } from 'child_process';
 import chalk from 'chalk';
+import { getFrameworkAdapter } from '../adapters';
 
 const program = new Command();
 
@@ -28,35 +29,37 @@ program
     .option('--tags <tags>', 'Run only tests with specified tags (comma-separated)')
     .action(async (pattern: string, options: any) => {
         try {
+            const config = ConfigLoader.load(options.config);
+            const framework = config.framework || 'playwright';
+            const adapter = getFrameworkAdapter(framework);
+
             console.log(chalk.blue('🤖 AI Test Framework\n'));
-            console.log(chalk.gray('Delegating to Playwright Test runner...\n'));
+            console.log(chalk.gray(`Delegating to ${adapter.displayName} test runner...\n`));
 
-            // Build playwright CLI args
-            const args: string[] = ['playwright', 'test'];
-            if (pattern) args.push(pattern);
+            const command = adapter.buildRunCommand({
+                pattern,
+                options: {
+                    headless: options.headless,
+                    browser: options.browser,
+                    timeout: options.timeout,
+                    config: options.config,
+                },
+            });
 
-            if (options.headless) {
-                // Playwright reads PWHEADLESS env var
-                process.env['PWHEADLESS'] = 'true';
-            }
-            if (options.browser) args.push('--project', options.browser);
-            if (options.timeout) args.push('--timeout', options.timeout);
-            if (options.config) args.push('--config', options.config);
-
-            const result = spawnSync('npx', args, {
+            const result = spawnSync(command.bin, command.args, {
                 stdio: 'inherit',
                 cwd: process.cwd(),
-                env: { ...process.env },
+                env: command.env,
             });
 
             if (result.error) throw result.error;
 
             if (result.status === 0) {
                 console.log(chalk.green('\n✓ All tests passed'));
-                console.log(chalk.gray('  View report: npx playwright show-report'));
+                console.log(chalk.gray(`  View report: ${command.reportHint}`));
             } else {
                 console.log(chalk.red('\n✗ Tests failed'));
-                console.log(chalk.gray('  View report: npx playwright show-report'));
+                console.log(chalk.gray(`  View report: ${command.reportHint}`));
             }
 
             process.exit(result.status ?? 1);
@@ -87,7 +90,10 @@ program
 
         // Create example config file
         const configContent = `module.exports = {
-  // Browser settings
+    // Test framework adapter
+    framework: 'playwright', // 'playwright' | 'cypress' | 'selenium'
+
+    // Browser settings
   browser: 'chromium', // 'chromium', 'firefox', or 'webkit'
   headless: true,
   viewport: { width: 1280, height: 720 },
@@ -129,7 +135,7 @@ program
         }
 
         // Create example test file
-        const exampleTest = `import { test } from 'web-agentic-ai';
+        const exampleTest = `import { test } from 'web-agentic-ai/playwright/fixtures';
 
 test('Example Login Test', async ({ agent }) => {
   // Navigate to login page
@@ -175,6 +181,7 @@ OPENAI_API_KEY=your-api-key-here
 # CUSTOM_LLM_MODEL=your-model-name
 
 # Test Configuration
+AI_TEST_FRAMEWORK=playwright
 AI_TEST_BROWSER=chromium
 AI_TEST_HEADLESS=true
 AI_TEST_TIMEOUT=60000

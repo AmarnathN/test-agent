@@ -25,7 +25,7 @@ This document details the changes made to implement intelligent model routing an
 - **Interface Alignment**: Updated method signatures (`locateElement`, `validateExpectation`, etc.) to accept `taskType?: any`.
 - **Linting**: Prefixed unused parameters with `_` (e.g., `_taskType`) to implicitly mark them as unused in the template while maintaining interface compliance.
 
-### 4. `src/executor/TestRunner.ts`
+### 4. `src/adapters/playwright/TestRunner.ts`
 - **Cleanup**: Removed unused `AICache` property and imports.
 - **Configuration Passing**: Now passes the full `FrameworkConfig` to `OpenAIProvider`, ensuring it has access to routing tables and budget limits.
 

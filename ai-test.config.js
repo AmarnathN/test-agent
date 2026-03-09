@@ -1,4 +1,7 @@
 module.exports = {
+  // Adapter selection
+  framework: 'playwright', // 'playwright' | 'cypress' | 'selenium'
+
   // Browser settings
   browser: 'chromium', // 'chromium', 'firefox', or 'webkit'
   headless: false,

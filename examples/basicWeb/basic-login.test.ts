@@ -1,4 +1,4 @@
-import { test } from '../../src/fixtures';
+import { test } from 'web-agentic-ai/playwright/fixtures';
 
 /**
  * Example: Basic login flow test

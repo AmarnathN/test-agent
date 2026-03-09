@@ -1,6 +1,5 @@
 // Main framework exports
 export { test, describe } from './dsl/TestCollector';
-export { TestRunner } from './executor/TestRunner';
 export { ConfigLoader } from './config/ConfigLoader';
 export { HTMLReporter } from './reporter/HTMLReporter';
 export { JUnitReporter } from './reporter/JUnitReporter';

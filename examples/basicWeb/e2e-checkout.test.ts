@@ -1,4 +1,4 @@
-import { test } from '../../src/dsl/TestCollector';
+import { test } from 'web-agentic-ai/playwright/fixtures';
 
 /**
  * Example: Complete e-commerce checkout flow

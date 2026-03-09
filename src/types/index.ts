@@ -1,5 +1,3 @@
-import { Page, BrowserContext } from '@playwright/test';
-
 /**
  * Test case definition
  */
@@ -16,8 +14,14 @@ export interface TestCase {
  */
 export interface TestContext {
     agent: BrowserAgent;
-    page: Page;
-    context: BrowserContext;
+    /**
+     * Framework-native handles (optional and adapter-defined).
+     * Example for Playwright adapter: page/context.
+     */
+    page?: unknown;
+    context?: unknown;
+    framework?: string;
+    runtime?: Record<string, unknown>;
 }
 
 /**
@@ -149,7 +153,11 @@ export interface TestSuiteResult {
  * Framework configuration
  */
 export interface FrameworkConfig {
+    // Automation framework adapter
+    framework?: 'playwright' | 'cypress' | 'selenium';
+
     // Browser settings
+    // Used by Playwright adapter; other adapters can ignore it.
     browser?: 'chromium' | 'firefox' | 'webkit';
     headless?: boolean;
     slowMo?: number;  // ms delay between each action — useful for debugging

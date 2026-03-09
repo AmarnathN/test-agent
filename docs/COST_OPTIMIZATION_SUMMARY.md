@@ -54,7 +54,7 @@ aiOptimization: {
 }
 ```
 
-### 4. **Integration** ([src/executor/TestRunner.ts](file:///Users/vayu/vayugit/WebAgenticAi/src/executor/TestRunner.ts))
+### 4. **Integration** (`src/adapters/playwright/TestRunner.ts`)
 
 - Initializes caches on startup
 - Passes `SelectorCache` to each `BrowserAgent`
@@ -129,7 +129,7 @@ selectorCache.recordSuccess('login button', 'example.com', aiSelector);
 
 2. **Modified Files:**
    - `src/agent/BrowserAgent.ts` - Optimized element finding
-   - `src/executor/TestRunner.ts` - Cache initialization
+  - `src/adapters/playwright/TestRunner.ts` - Cache initialization
    - `src/types/index.ts` - New config options
    - `src/config/ConfigLoader.ts` - Default config
    - `README.md` - Cost optimization section

@@ -29,6 +29,12 @@
         "paths": {
             "web-agentic-ai": [
                 "src/index.ts"
+            ],
+            "web-agentic-ai/playwright": [
+                "src/adapters/playwright/index.ts"
+            ],
+            "web-agentic-ai/playwright/*": [
+                "src/adapters/playwright/*"
             ]
         }
     },

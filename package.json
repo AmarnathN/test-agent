@@ -10,10 +10,20 @@
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
     },
-    "./fixtures": {
-      "require": "./dist/fixtures.js",
-      "import": "./dist/fixtures.js",
-      "types": "./dist/fixtures.d.ts"
+    "./playwright": {
+      "require": "./dist/adapters/playwright/index.js",
+      "import": "./dist/adapters/playwright/index.js",
+      "types": "./dist/adapters/playwright/index.d.ts"
+    },
+    "./playwright/fixtures": {
+      "require": "./dist/adapters/playwright/fixtures.js",
+      "import": "./dist/adapters/playwright/fixtures.js",
+      "types": "./dist/adapters/playwright/fixtures.d.ts"
+    },
+    "./playwright/runner": {
+      "require": "./dist/adapters/playwright/TestRunner.js",
+      "import": "./dist/adapters/playwright/TestRunner.js",
+      "types": "./dist/adapters/playwright/TestRunner.d.ts"
     }
   },
   "files": [
@@ -52,6 +62,11 @@
   },
   "peerDependencies": {
     "@playwright/test": ">=1.40.1"
+  },
+  "peerDependenciesMeta": {
+    "@playwright/test": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@playwright/test": "^1.40.1",
